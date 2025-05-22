@@ -1,13 +1,10 @@
-import { remarkInstall } from "fumadocs-docgen";
 import { remarkAutoTypeTable, createGenerator } from "fumadocs-typescript";
 import {
-  defineCollections,
   defineConfig,
   defineDocs,
   frontmatterSchema,
   metaSchema,
 } from "fumadocs-mdx/config";
-import z from "zod";
 
 const generator = createGenerator();
 
@@ -22,18 +19,9 @@ export const docs = defineDocs({
   },
 });
 
-export const blog = defineCollections({
-  type: "doc",
-  dir: "content/blog",
-  schema: frontmatterSchema.extend({
-    author: z.string(),
-    date: z.string().date().or(z.date()),
-  }),
-});
-
 export default defineConfig({
   lastModifiedTime: "git",
   mdxOptions: {
-    remarkPlugins: [remarkInstall, [remarkAutoTypeTable, { generator }]],
+    remarkPlugins: [[remarkAutoTypeTable, { generator }]],
   },
 });

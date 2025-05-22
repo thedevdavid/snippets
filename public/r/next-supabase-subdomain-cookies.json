@@ -23,43 +23,43 @@
   ],
   "files": [
     {
-      "path": "src/registry/new-york/blocks/subdomain-cookies/next-supabase/auth/page.tsx",
-      "content": "import { AuthCard } from \"@/registry/new-york/blocks/subdomain-cookies/next-supabase/components/auth-card\";\n\nexport default async function Page() {\n  return (\n    <div className=\"mx-auto w-full max-w-2xl px-4\">\n      <AuthCard />\n    </div>\n  );\n}\n",
+      "path": "src/registry/new-york/blocks/next-supabase/subdomain-cookies/auth/page.tsx",
+      "content": "import { AuthCard } from \"@/registry/new-york/blocks/next-supabase/subdomain-cookies/components/auth-card\";\n\nexport default async function Page() {\n  return (\n    <div className=\"mx-auto w-full max-w-2xl px-4\">\n      <AuthCard />\n    </div>\n  );\n}\n",
       "type": "registry:page",
       "target": "app/auth/page.tsx"
     },
     {
-      "path": "src/registry/new-york/blocks/subdomain-cookies/next-supabase/components/auth-card.tsx",
-      "content": "import { Card, CardContent } from \"@/registry/new-york/ui/card\";\nimport { Label } from \"@/registry/new-york/ui/label\";\nimport { Input } from \"@/registry/new-york/ui/input\";\nimport { Button } from \"@/registry/new-york/ui/button\";\nimport { createClient } from \"@/registry/new-york/blocks/subdomain-cookies/next-supabase/lib/server\";\nimport { redirect } from \"next/navigation\";\n\nexport async function AuthCard() {\n  const login = async (formData: FormData) => {\n    \"use server\";\n    const supabase = await createClient();\n    const { data, error } = await supabase.auth.signInWithOtp({\n      email: formData.get(\"email\") as string,\n    });\n    if (error) {\n      console.error(error);\n    }\n\n    redirect(\"/\");\n  };\n\n  return (\n    <Card>\n      <CardContent className=\"flex flex-col items-center p-2\">\n        <form className=\"flex flex-col gap-2 w-full max-w-md mx-auto\">\n          <Label htmlFor=\"email\">Email:</Label>\n          <Input id=\"email\" name=\"email\" type=\"email\" required />\n          <Button formAction={login}>Log in</Button>\n        </form>\n      </CardContent>\n    </Card>\n  );\n}\n",
+      "path": "src/registry/new-york/blocks/next-supabase/subdomain-cookies/components/auth-card.tsx",
+      "content": "import { Card, CardContent } from \"@/registry/new-york/ui/card\";\nimport { Label } from \"@/registry/new-york/ui/label\";\nimport { Input } from \"@/registry/new-york/ui/input\";\nimport { Button } from \"@/registry/new-york/ui/button\";\nimport { createClient } from \"@/registry/new-york/blocks/next-supabase/subdomain-cookies/lib/server\";\nimport { redirect } from \"next/navigation\";\n\nexport async function AuthCard() {\n  const login = async (formData: FormData) => {\n    const supabase = await createClient();\n    const { data, error } = await supabase.auth.signInWithOtp({\n      email: formData.get(\"email\") as string,\n    });\n    if (error) {\n      console.error(error);\n    }\n\n    redirect(\"/\");\n  };\n\n  return (\n    <Card>\n      <CardContent className=\"flex flex-col items-center p-2\">\n        <form className=\"flex flex-col gap-2 w-full max-w-md mx-auto\">\n          <Label htmlFor=\"email\">Email:</Label>\n          <Input id=\"email\" name=\"email\" type=\"email\" required />\n          <Button formAction={login}>Log in</Button>\n        </form>\n      </CardContent>\n    </Card>\n  );\n}\n",
       "type": "registry:component",
       "target": "components/auth-card.tsx"
     },
     {
-      "path": "src/registry/new-york/blocks/subdomain-cookies/next-supabase/lib/middleware.ts",
+      "path": "src/registry/new-york/blocks/next-supabase/subdomain-cookies/lib/middleware.ts",
       "content": "import { createServerClient } from \"@supabase/ssr\";\nimport { NextResponse, type NextRequest } from \"next/server\";\nimport { COOKIE_OPTIONS } from \"./auth-config\";\n\nexport async function updateSession(request: NextRequest) {\n  let supabaseResponse = NextResponse.next({\n    request,\n  });\n\n  const supabase = createServerClient(\n    process.env.NEXT_PUBLIC_SUPABASE_URL!,\n    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,\n    {\n      cookieOptions: COOKIE_OPTIONS,\n      cookies: {\n        getAll() {\n          return request.cookies.getAll();\n        },\n        setAll(cookiesToSet) {\n          cookiesToSet.forEach(({ name, value, options }) =>\n            request.cookies.set(name, value)\n          );\n          supabaseResponse = NextResponse.next({\n            request,\n          });\n          cookiesToSet.forEach(({ name, value, options }) =>\n            supabaseResponse.cookies.set(name, value, options)\n          );\n        },\n      },\n    }\n  );\n\n  // Do not run code between createServerClient and\n  // supabase.auth.getUser(). A simple mistake could make it very hard to debug\n  // issues with users being randomly logged out.\n\n  // IMPORTANT: DO NOT REMOVE auth.getUser()\n\n  const {\n    data: { user },\n  } = await supabase.auth.getUser();\n\n  if (\n    !user &&\n    !request.nextUrl.pathname.startsWith(\"/login\") &&\n    !request.nextUrl.pathname.startsWith(\"/auth\")\n  ) {\n    // no user, potentially respond by redirecting the user to the login page\n    const url = request.nextUrl.clone();\n    url.pathname = \"/login\";\n    return NextResponse.redirect(url);\n  }\n\n  // IMPORTANT: You *must* return the supabaseResponse object as it is.\n  // If you're creating a new response object with NextResponse.next() make sure to:\n  // 1. Pass the request in it, like so:\n  //    const myNewResponse = NextResponse.next({ request })\n  // 2. Copy over the cookies, like so:\n  //    myNewResponse.cookies.setAll(supabaseResponse.cookies.getAll())\n  // 3. Change the myNewResponse object to fit your needs, but avoid changing\n  //    the cookies!\n  // 4. Finally:\n  //    return myNewResponse\n  // If this is not done, you may be causing the browser and server to go out\n  // of sync and terminate the user's session prematurely!\n\n  return supabaseResponse;\n}\n",
       "type": "registry:lib",
       "target": "utils/supabase/middleware.ts"
     },
     {
-      "path": "src/registry/new-york/blocks/subdomain-cookies/next-supabase/lib/server.ts",
+      "path": "src/registry/new-york/blocks/next-supabase/subdomain-cookies/lib/server.ts",
       "content": "import { COOKIE_OPTIONS } from \"./auth-config\";\nimport { createServerClient } from \"@supabase/ssr\";\nimport { cookies } from \"next/headers\";\n\nexport async function createClient() {\n  const cookieStore = await cookies();\n\n  return createServerClient(\n    process.env.NEXT_PUBLIC_SUPABASE_URL!,\n    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,\n    {\n      cookieOptions: COOKIE_OPTIONS,\n      cookies: {\n        getAll() {\n          return cookieStore.getAll();\n        },\n        setAll(cookiesToSet) {\n          try {\n            cookiesToSet.forEach(({ name, value, options }) =>\n              cookieStore.set(name, value, options)\n            );\n          } catch {\n            // The `setAll` method was called from a Server Component.\n            // This can be ignored if you have middleware refreshing\n            // user sessions.\n          }\n        },\n      },\n    }\n  );\n}\n",
       "type": "registry:lib",
       "target": "utils/supabase/server.ts"
     },
     {
-      "path": "src/registry/new-york/blocks/subdomain-cookies/next-supabase/lib/client.ts",
+      "path": "src/registry/new-york/blocks/next-supabase/subdomain-cookies/lib/client.ts",
       "content": "import { createBrowserClient } from \"@supabase/ssr\";\nimport { COOKIE_OPTIONS } from \"./auth-config\";\n\nexport function createClient() {\n  return createBrowserClient(\n    process.env.NEXT_PUBLIC_SUPABASE_URL!,\n    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,\n    {\n      cookieOptions: COOKIE_OPTIONS,\n    }\n  );\n}\n",
       "type": "registry:lib",
       "target": "utils/supabase/client.ts"
     },
     {
-      "path": "src/registry/new-york/blocks/subdomain-cookies/next-supabase/lib/auth-config.ts",
+      "path": "src/registry/new-york/blocks/next-supabase/subdomain-cookies/lib/auth-config.ts",
       "content": "import type { CookieOptionsWithName } from \"@supabase/ssr\";\nimport { DEFAULT_COOKIE_OPTIONS } from \"@supabase/ssr\";\n\nexport const COOKIE_OPTIONS: CookieOptionsWithName = {\n  ...DEFAULT_COOKIE_OPTIONS,\n  name: \"auth_session\",\n  domain: process.env.COOKIE_DOMAIN ?? \".localhost\",\n};\n",
       "type": "registry:lib",
       "target": "utils/supabase/auth-config.ts"
     },
     {
-      "path": "src/registry/new-york/blocks/subdomain-cookies/next-supabase/lib/next.config.ts",
+      "path": "src/registry/new-york/blocks/next-supabase/subdomain-cookies/lib/next.config.ts",
       "content": "",
       "type": "registry:lib",
       "target": "next.config.ts"
