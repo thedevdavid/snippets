@@ -4,12 +4,14 @@ import {
   DocsBody,
   DocsDescription,
   DocsTitle,
+  EditOnGitHub,
 } from "fumadocs-ui/page";
 import { notFound } from "next/navigation";
 import { createRelativeLink } from "fumadocs-ui/mdx";
 import { getMDXComponents } from "@/mdx-components";
 import { Rate } from "@/components/rate";
 import posthog from "posthog-js";
+import { getGithubLastEdit } from "fumadocs-core/server";
 
 export default async function Page(props: {
   params: Promise<{ slug?: string[] }>;
@@ -19,12 +21,26 @@ export default async function Page(props: {
   if (!page) notFound();
 
   const MDXContent = page.data.body;
+  const lastModified = page.data.lastModified
+    ? new Date(page.data.lastModified).toLocaleDateString()
+    : undefined;
+
+  const time = await getGithubLastEdit({
+    owner: "thedevdavid",
+    repo: "snippets",
+    path: `content/docs/${page.file.path}`,
+  });
+
+  const lastUpdate = time ? new Date(time).toLocaleDateString() : undefined;
 
   return (
-    <DocsPage toc={page.data.toc} full={page.data.full}>
+    <DocsPage toc={page.data.toc} full={page.data.full} lastUpdate={lastUpdate}>
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsDescription>{page.data.description}</DocsDescription>
       <DocsBody>
+        <EditOnGitHub
+          href={`https://github.com/thedevdavid/snippets/edit/main/content/docs/${page.file.path}`}
+        />
         <MDXContent
           components={getMDXComponents({
             // this allows you to link to other pages with relative file paths
@@ -37,6 +53,9 @@ export default async function Page(props: {
             await posthog.capture("on_rate_docs", feedback);
           }}
         />
+        {lastModified && (
+          <p className="text-sm text-gray-500">Last updated: {lastModified}</p>
+        )}
       </DocsBody>
     </DocsPage>
   );
