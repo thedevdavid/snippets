@@ -15,37 +15,37 @@
       "categories": ["auth", "cookies", "nextjs", "supabase", "fullstack"],
       "files": [
         {
-          "path": "src/registry/new-york/blocks/next-supabase/subdomain-cookies/auth/page.tsx",
+          "path": "src/registry/new-york/blocks/subdomain-cookies/next-supabase/auth/page.tsx",
           "type": "registry:page",
           "target": "app/auth/page.tsx"
         },
         {
-          "path": "src/registry/new-york/blocks/next-supabase/subdomain-cookies/components/auth-card.tsx",
+          "path": "src/registry/new-york/blocks/subdomain-cookies/next-supabase/components/auth-card.tsx",
           "type": "registry:component",
           "target": "components/auth-card.tsx"
         },
         {
-          "path": "src/registry/new-york/blocks/next-supabase/subdomain-cookies/lib/middleware.ts",
+          "path": "src/registry/new-york/blocks/subdomain-cookies/next-supabase/lib/middleware.ts",
           "type": "registry:lib",
           "target": "utils/supabase/middleware.ts"
         },
         {
-          "path": "src/registry/new-york/blocks/next-supabase/subdomain-cookies/lib/server.ts",
+          "path": "src/registry/new-york/blocks/subdomain-cookies/next-supabase/lib/server.ts",
           "type": "registry:lib",
           "target": "utils/supabase/server.ts"
         },
         {
-          "path": "src/registry/new-york/blocks/next-supabase/subdomain-cookies/lib/client.ts",
+          "path": "src/registry/new-york/blocks/subdomain-cookies/next-supabase/lib/client.ts",
           "type": "registry:lib",
           "target": "utils/supabase/client.ts"
         },
         {
-          "path": "src/registry/new-york/blocks/next-supabase/subdomain-cookies/lib/auth-config.ts",
+          "path": "src/registry/new-york/blocks/subdomain-cookies/next-supabase/lib/auth-config.ts",
           "type": "registry:lib",
           "target": "utils/supabase/auth-config.ts"
         },
         {
-          "path": "src/registry/new-york/blocks/next-supabase/subdomain-cookies/lib/next.config.ts",
+          "path": "src/registry/new-york/blocks/subdomain-cookies/next-supabase/lib/next.config.ts",
           "type": "registry:lib",
           "target": "next.config.ts"
         }

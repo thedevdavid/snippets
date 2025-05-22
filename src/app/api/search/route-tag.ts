@@ -10,7 +10,7 @@ export const { GET } = createFromSource(source, {
       id: page.url,
       structuredData: page.data.structuredData,
       // use your desired value, like page.slugs[0]
-      tag: "<value>",
+      // tag: page.slugs[0],
     };
   },
 });
