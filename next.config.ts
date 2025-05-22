@@ -9,6 +9,9 @@ const config: NextConfig = {
     loader: "custom",
     loaderFile: "./src/lib/image-loader.ts",
   },
+  experimental: {
+    optimizePackageImports: ["@phosphor-icons/react"],
+  },
   async rewrites() {
     return [
       {
