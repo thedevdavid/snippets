@@ -2,11 +2,12 @@ import { Card, CardContent } from "@/registry/new-york/ui/card";
 import { Label } from "@/registry/new-york/ui/label";
 import { Input } from "@/registry/new-york/ui/input";
 import { Button } from "@/registry/new-york/ui/button";
-import { createClient } from "@/registry/new-york/blocks/next-supabase/subdomain-cookies/lib/server";
+import { createClient } from "@/registry/new-york/blocks/subdomain-cookies/next-supabase/lib/server";
 import { redirect } from "next/navigation";
 
 export async function AuthCard() {
   const login = async (formData: FormData) => {
+    "use server";
     const supabase = await createClient();
     const { data, error } = await supabase.auth.signInWithOtp({
       email: formData.get("email") as string,

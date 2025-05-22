@@ -31,13 +31,5 @@ export const baseOptions: BaseLayoutProps = {
     ),
   },
   // see https://fumadocs.dev/docs/ui/navigation/links
-  links: [
-    {
-      icon: <Brain />,
-      text: "llms.txt",
-      url: "/llms.txt",
-      // secondary items will be displayed differently on navbar
-      secondary: true,
-    },
-  ],
+  links: [],
 };

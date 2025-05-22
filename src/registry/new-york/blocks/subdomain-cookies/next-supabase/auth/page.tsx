@@ -1,4 +1,4 @@
-import { AuthCard } from "@/registry/new-york/blocks/next-supabase/subdomain-cookies/components/auth-card";
+import { AuthCard } from "@/registry/new-york/blocks/subdomain-cookies/next-supabase/components/auth-card";
 
 export default async function Page() {
   return (
