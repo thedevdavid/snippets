@@ -1,0 +1,55 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry.json",
+  "name": "snippets",
+  "homepage": "https://snippets.thedevdavid.com",
+  "items": [
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "next-supabase-subdomain-cookies",
+      "title": "Next.js + Supabase Subdomain Cookies",
+      "type": "registry:block",
+      "description": "A subdomain cookie supabase component",
+      "registryDependencies": ["card", "button", "input", "label"],
+      "dependencies": ["@supabase/ssr"],
+      "author": "thedevdavid <https://github.com/thedevdavid>",
+      "categories": ["auth", "cookies", "nextjs", "supabase", "fullstack"],
+      "files": [
+        {
+          "path": "src/registry/new-york/blocks/next-supabase/subdomain-cookies/auth/page.tsx",
+          "type": "registry:page",
+          "target": "app/auth/page.tsx"
+        },
+        {
+          "path": "src/registry/new-york/blocks/next-supabase/subdomain-cookies/components/auth-card.tsx",
+          "type": "registry:component",
+          "target": "components/auth-card.tsx"
+        },
+        {
+          "path": "src/registry/new-york/blocks/next-supabase/subdomain-cookies/lib/middleware.ts",
+          "type": "registry:lib",
+          "target": "utils/supabase/middleware.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/next-supabase/subdomain-cookies/lib/server.ts",
+          "type": "registry:lib",
+          "target": "utils/supabase/server.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/next-supabase/subdomain-cookies/lib/client.ts",
+          "type": "registry:lib",
+          "target": "utils/supabase/client.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/next-supabase/subdomain-cookies/lib/auth-config.ts",
+          "type": "registry:lib",
+          "target": "utils/supabase/auth-config.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/next-supabase/subdomain-cookies/lib/next.config.ts",
+          "type": "registry:lib",
+          "target": "next.config.ts"
+        }
+      ]
+    }
+  ]
+}

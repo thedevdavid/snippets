@@ -1,4 +1,5 @@
-import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
+import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
+import { Brain } from "lucide-react";
 
 /**
  * Shared layout configurations
@@ -8,6 +9,12 @@ import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
  * Docs Layout: app/docs/layout.tsx
  */
 export const baseOptions: BaseLayoutProps = {
+  githubUrl: "https://github.com/thedevdavid/snippets",
+  themeSwitch: {
+    enabled: true,
+    mode: "light-dark-system",
+  },
+  searchToggle: { enabled: true },
   nav: {
     title: (
       <>
@@ -19,10 +26,18 @@ export const baseOptions: BaseLayoutProps = {
         >
           <circle cx={12} cy={12} r={12} fill="currentColor" />
         </svg>
-        My App
+        Snippets
       </>
     ),
   },
   // see https://fumadocs.dev/docs/ui/navigation/links
-  links: [],
+  links: [
+    {
+      icon: <Brain />,
+      text: "llms.txt",
+      url: "/llms.txt",
+      // secondary items will be displayed differently on navbar
+      secondary: true,
+    },
+  ],
 };
