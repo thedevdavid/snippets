@@ -5,27 +5,45 @@ export default function BlogPage() {
   const posts = blog.getPages();
 
   return (
-    <main className="container max-sm:px-0 md:py-12">
-      <h1 className="mb-4 border-b-4 border-fd-foreground pb-2 text-4xl font-bold md:text-5xl">
-        Snippets Blog
-      </h1>
-      <div className="border">
-        {posts.map((post) => (
-          <Link
-            key={post.url}
-            href={post.url}
-            className="flex flex-col bg-fd-card p-4 transition-colors hover:bg-fd-accent hover:text-fd-accent-foreground"
-          >
-            <p className="font-medium">{post.data.title}</p>
-            <p className="text-sm text-fd-muted-foreground">
-              {post.data.description}
-            </p>
+    <main className="min-h-screen px-4 py-6 md:px-6 lg:px-8">
+      <div className="mx-auto max-w-2xl">
+        <header className="mb-6 flex items-center justify-between">
+          <h1 className="text-xl font-bold">Snippets blog</h1>
+        </header>
 
-            <p className="mt-auto pt-4 text-xs text-fd-muted-foreground">
-              {new Date(post.data.date ?? post.file.name).toDateString()}
-            </p>
-          </Link>
-        ))}
+        <p className="mb-6 text-sm text-fd-muted-foreground">
+          Details about building and using the snippets.
+        </p>
+
+        <section>
+          <div className="space-y-6">
+            {posts.slice(0, 4).map((post) => (
+              <article key={post.url}>
+                <Link href={post.url} className="group block">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <h3 className="mb-1 text-sm font-medium group-hover:text-fd-primary">
+                        {post.data.title}
+                      </h3>
+                      <p className="text-xs text-fd-muted-foreground">
+                        {post.data.description}
+                      </p>
+                    </div>
+                    <time className="shrink-0 text-xs text-fd-muted-foreground">
+                      {new Date(
+                        post.data.date ?? post.file.name
+                      ).toLocaleDateString("en-US", {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </time>
+                  </div>
+                </Link>
+              </article>
+            ))}
+          </div>
+        </section>
       </div>
     </main>
   );

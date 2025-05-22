@@ -3,7 +3,13 @@ import { notFound } from "next/navigation";
 import { createRelativeLink } from "fumadocs-ui/mdx";
 import { getMDXComponents } from "@/mdx-components";
 import Link from "next/link";
-import { InlineTOC } from "fumadocs-ui/components/inline-toc";
+import {
+  ClockIcon,
+  HouseSimpleIcon,
+  CaretRightIcon,
+} from "@phosphor-icons/react/ssr";
+import { BackToTop } from "@/components/back-to-top";
+import { ShareButtons } from "@/components/share-buttons";
 
 export default async function Page(props: {
   params: Promise<{ slug: string }>;
@@ -14,40 +20,105 @@ export default async function Page(props: {
   if (!page) notFound();
   const MDXContent = page.data.body;
 
-  return (
-    <>
-      <div className="container pt-8 md:px-8">
-        <Link href="/blog" className="border px-4 py-2 rounded">
-          Back
-        </Link>
-        <h1 className="my-2 text-3xl font-bold">{page.data.title}</h1>
-        <p className="mb-4">{page.data.description}</p>
-      </div>
+  // Calculate reading time (rough estimate: 200 words per minute)
+  const content = MDXContent.toString() || "";
+  const wordCount = content.split(/\s+/).length;
+  const readingTime = Math.ceil(wordCount / 200);
 
-      <article className="container flex flex-col px-0 py-8 lg:flex-row lg:px-4">
-        <div className="prose min-w-0 flex-1 p-4">
-          <InlineTOC items={page.data.toc} />
-          <MDXContent
-            components={getMDXComponents({
-              a: createRelativeLink(blog, page),
-            })}
-          />
-          {/* <page.data.body components={defaultMdxComponents} /> */}
+  return (
+    <div className="min-h-screen">
+      <article className="mx-auto max-w-5xl px-4 py-6">
+        {/* Breadcrumb */}
+        <nav className="mb-6 flex items-center space-x-1 text-xs text-fd-muted-foreground">
+          <Link href="/" className="hover:text-fd-foreground">
+            <HouseSimpleIcon size={12} weight="duotone" className="size-3" />
+          </Link>
+          <CaretRightIcon size={12} weight="duotone" className="size-3" />
+          <Link href="/blog" className="hover:text-fd-foreground">
+            Blog
+          </Link>
+        </nav>
+
+        {/* Title */}
+        <h1 className="mb-4 text-2xl font-bold md:text-3xl lg:text-4xl">
+          {page.data.title}
+        </h1>
+
+        {/* Author info */}
+        <div className="mb-6 flex items-center gap-3 text-xs text-fd-muted-foreground">
+          <div className="flex items-center gap-3">
+            <span className="font-medium text-fd-foreground">
+              {page.data.author || "thedevdavid"}
+            </span>
+          </div>
+          <span>
+            on{" "}
+            {new Date(page.data.date ?? page.file.name).toLocaleDateString(
+              "en-US",
+              {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              }
+            )}
+          </span>
+          <span className="flex items-center gap-1">
+            <ClockIcon size={12} weight="duotone" className="size-3" />
+            {readingTime} min. read
+          </span>
         </div>
-        <div className="flex flex-col gap-4 border-l p-4 text-sm lg:w-[250px]">
-          <div>
-            <p className="mb-1 text-fd-muted-foreground">Written by</p>
-            <p className="font-medium">{page.data.author}</p>
+
+        <hr className="mb-6" />
+
+        {/* Main content with sidebar */}
+        <div className="flex flex-col gap-6 lg:flex-row">
+          {/* Article content */}
+          <div className="flex-1">
+            <div className="prose prose-sm prose-neutral max-w-none dark:prose-invert">
+              <MDXContent
+                components={getMDXComponents({
+                  a: createRelativeLink(blog, page),
+                })}
+              />
+            </div>
           </div>
-          <div>
-            <p className="mb-1 text-sm text-fd-muted-foreground">At</p>
-            <p className="font-medium">
-              {new Date(page.data.date ?? page.file.name).toDateString()}
-            </p>
-          </div>
+
+          {/* Sidebar */}
+          <aside className="lg:w-72">
+            <div className="sticky top-6 space-y-6">
+              {/* Table of Contents */}
+              {page.data.toc && page.data.toc.length > 0 && (
+                <div>
+                  <h3 className="mb-3 text-base font-semibold">On this page</h3>
+                  <nav className="space-y-2">
+                    {page.data.toc.map((item) => (
+                      <a
+                        key={item.url}
+                        href={item.url}
+                        className="block text-xs text-fd-muted-foreground hover:text-fd-foreground"
+                        style={{ paddingLeft: `${(item.depth - 2) * 12}px` }}
+                      >
+                        {item.title}
+                      </a>
+                    ))}
+                  </nav>
+                </div>
+              )}
+
+              {/* Share section */}
+              <div>
+                <ShareButtons title={page.data.title} />
+              </div>
+
+              {/* Back to top */}
+              <div className="pt-8">
+                <BackToTop />
+              </div>
+            </div>
+          </aside>
         </div>
       </article>
-    </>
+    </div>
   );
 }
 
