@@ -1,0 +1,229 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry.json",
+  "name": "snippets",
+  "homepage": "https://snippets.thedevdavid.com",
+  "items": [
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "subdomain-cookies-supabase-nextjs",
+      "title": "Subdomain Cookies - Supabase + Next.js",
+      "type": "registry:block",
+      "description": "Set up authentication cookies across subdomains - Supabase + Next.js",
+      "registryDependencies": ["card", "button", "input", "label", "tabs"],
+      "dependencies": ["@supabase/ssr"],
+      "author": "thedevdavid <https://github.com/thedevdavid>",
+      "categories": ["auth", "cookies", "nextjs", "supabase", "fullstack"],
+      "files": [
+        {
+          "path": "src/registry/new-york/blocks/subdomain-cookies/supabase-nextjs/app/auth/page.tsx",
+          "type": "registry:page",
+          "target": "app/auth/page.tsx"
+        },
+        {
+          "path": "src/registry/new-york/blocks/subdomain-cookies/supabase-nextjs/app/auth/confirm/route.ts",
+          "type": "registry:page",
+          "target": "app/auth/confirm/route.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/subdomain-cookies/supabase-nextjs/app/auth/logout/route.ts",
+          "type": "registry:page",
+          "target": "app/auth/logout/route.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/subdomain-cookies/supabase-nextjs/lib/middleware-config.ts",
+          "type": "registry:lib",
+          "target": "utils/middleware-config.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/subdomain-cookies/supabase-nextjs/lib/middleware.ts",
+          "type": "registry:lib",
+          "target": "middleware.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/subdomain-cookies/supabase-nextjs/components/auth-card.tsx",
+          "type": "registry:component",
+          "target": "components/auth-card.tsx"
+        },
+        {
+          "path": "src/registry/new-york/blocks/subdomain-cookies/supabase-nextjs/lib/supabase/middleware.ts",
+          "type": "registry:lib",
+          "target": "utils/supabase/middleware.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/subdomain-cookies/supabase-nextjs/lib/supabase/server.ts",
+          "type": "registry:lib",
+          "target": "utils/supabase/server.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/subdomain-cookies/supabase-nextjs/lib/supabase/client.ts",
+          "type": "registry:lib",
+          "target": "utils/supabase/client.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/subdomain-cookies/supabase-nextjs/lib/supabase/auth-config.ts",
+          "type": "registry:lib",
+          "target": "utils/supabase/auth-config.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/subdomain-cookies/supabase-nextjs/lib/supabase/middleware-enhanced.ts",
+          "type": "registry:lib",
+          "target": "utils/supabase/middleware-enhanced.ts"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "hono-better-auth-cloudflare-workers",
+      "title": "Hono + Better Auth + Cloudflare Workers",
+      "type": "registry:block",
+      "description": "Server code for Better Auth with Hono and Cloudflare Workers",
+      "dependencies": [
+        "hono",
+        "better-auth",
+        "resend",
+        "drizzle-orm",
+        "postgres",
+        "pg"
+      ],
+      "registryDependencies": ["card", "button", "input", "label", "tabs"],
+      "author": "thedevdavid <https://github.com/thedevdavid>",
+      "categories": [
+        "auth",
+        "cookies",
+        "fullstack",
+        "hono",
+        "cloudflare",
+        "workers",
+        "better-auth"
+      ],
+      "files": [
+        {
+          "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/env.ts",
+          "type": "registry:lib",
+          "target": "lib/env.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/auth-schema.ts",
+          "type": "registry:lib",
+          "target": "lib/auth-schema.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/db-schema.ts",
+          "type": "registry:lib",
+          "target": "lib/db-schema.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/auth.ts",
+          "type": "registry:lib",
+          "target": "auth.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/create-auth.ts",
+          "type": "registry:lib",
+          "target": "lib/create-auth.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/create-db.ts",
+          "type": "registry:lib",
+          "target": "lib/create-db.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/index.ts",
+          "type": "registry:lib",
+          "target": "index.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/wrangler.jsonc",
+          "type": "registry:lib",
+          "target": "wrangler.jsonc"
+        },
+        {
+          "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/.dev.vars.example",
+          "type": "registry:lib",
+          "target": ".dev.vars.example"
+        },
+        {
+          "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/use-auth.ts",
+          "type": "registry:lib",
+          "target": "lib/use-auth.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/lib/email/resend.ts",
+          "type": "registry:lib",
+          "target": "lib/email/resend.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/lib/adapters/drizzle-adapter.ts",
+          "type": "registry:lib",
+          "target": "lib/adapters/drizzle-adapter.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/lib/adapters/default-adapter.ts",
+          "type": "registry:lib",
+          "target": "lib/adapters/default-adapter.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/lib/adapters/index.ts",
+          "type": "registry:lib",
+          "target": "lib/adapters/index.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/lib/create-auth-modular.ts",
+          "type": "registry:lib",
+          "target": "lib/create-auth-modular.ts"
+        }
+      ]
+    },
+    {
+      "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+      "name": "hono-better-auth-cloudflare-workers-client-nextjs",
+      "title": "Hono + Better Auth + Cloudflare Workers Client (Next.js)",
+      "type": "registry:block",
+      "description": "Client code for Better Auth with Hono and Cloudflare Workers (Next.js)",
+      "dependencies": ["better-auth", "next"],
+      "author": "thedevdavid <https://github.com/thedevdavid>",
+      "categories": [
+        "auth",
+        "cookies",
+        "fullstack",
+        "hono",
+        "nextjs",
+        "cloudflare",
+        "workers",
+        "better-auth"
+      ],
+      "files": [
+        {
+          "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/nextjs/auth-client.ts",
+          "type": "registry:lib",
+          "target": "lib/auth-client.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/nextjs/auth-middleware.ts",
+          "type": "registry:lib",
+          "target": "lib/auth-middleware.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/nextjs/middleware.ts",
+          "type": "registry:lib",
+          "target": "middleware.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/nextjs/server.ts",
+          "type": "registry:lib",
+          "target": "lib/auth.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/nextjs/get-session.ts",
+          "type": "registry:lib",
+          "target": "lib/get-session.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/nextjs/.env.example",
+          "type": "registry:lib",
+          "target": ".env.example"
+        }
+      ]
+    }
+  ]
+}

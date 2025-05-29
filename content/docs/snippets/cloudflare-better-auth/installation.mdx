@@ -1,0 +1,466 @@
+---
+title: Installation
+description: Build a secure authentication API with Cloudflare Workers, Better Auth, and Hono
+---
+
+import { File, Folder, Files } from "fumadocs-ui/components/files";
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { Steps, Step } from "fumadocs-ui/components/steps";
+import { Callout } from "fumadocs-ui/components/callout";
+import { Cards, Card } from "fumadocs-ui/components/card";
+
+<Callout title="Use Case" type="info">
+  Perfect for building authentication APIs that scale globally with Cloudflare's edge network. Ideal for SaaS applications, mobile app backends, and microservices architectures.
+</Callout>
+
+## Overview
+
+This snippet provides a production-ready authentication API using:
+- **Cloudflare Workers** - Deploy globally at the edge
+- **Better Auth** - Modern authentication library with extensive features
+- **Hono** - Lightweight web framework optimized for edge
+- **PostgreSQL + Hyperdrive** - Database with connection pooling
+- **Drizzle ORM** - Type-safe database queries
+
+### Key Features
+
+- 🔐 **Complete Auth System** - Email/password, magic links, password reset
+- 🌍 **Global Edge Deployment** - Sub-50ms latency worldwide
+- 🛡️ **Built-in Security** - Rate limiting, CAPTCHA, CORS protection
+- 📧 **Email Verification** - Secure account activation flow
+- 👤 **Admin Roles** - Role-based access control
+- 🔄 **Session Management** - 90-day sessions with refresh
+- 🏗️ **Production Ready** - Monitoring, staging environments, error handling
+
+### What's Included
+
+<Files>
+  <Folder name="lib" defaultOpen>
+    <File name="auth-schema.ts" />
+    <File name="auth.ts" />
+    <File name="create-auth.ts" />
+    <File name="create-db.ts" />
+    <File name="db-schema.ts" />
+    <File name="env.ts" />
+    <File name="use-auth.ts" />
+  </Folder>
+  <File name="index.ts" />
+  <File name="wrangler.jsonc" />
+  <File name=".dev.vars.example" />
+</Files>
+
+## Prerequisites
+
+<Steps>
+  <Step>
+    ### Cloudflare Account
+    
+    1. Sign up for [Cloudflare](https://dash.cloudflare.com/sign-up)
+    2. Install Wrangler CLI:
+    ```bash
+    npm install -g wrangler
+    ```
+    3. Authenticate:
+    ```bash
+    wrangler login
+    ```
+  </Step>
+  
+  <Step>
+    ### PostgreSQL Database
+    
+    You need a PostgreSQL database. Options:
+    - **Neon** - Serverless PostgreSQL (recommended)
+    - **Supabase** - PostgreSQL with extras
+    - **Railway** - Simple PostgreSQL hosting
+    - **Self-hosted** - Your own PostgreSQL instance
+    
+    Get your connection string in format:
+    ```
+    postgresql://user:password@host:port/database
+    ```
+  </Step>
+  
+  <Step>
+    ### Cloudflare Turnstile (Optional)
+    
+    For CAPTCHA protection:
+    1. Go to [Cloudflare Turnstile](https://dash.cloudflare.com/turnstile)
+    2. Create a new site
+    3. Copy the secret key
+  </Step>
+</Steps>
+
+## Installation
+
+<Tabs items={["CLI", "Manual"]}>
+  <Tab value="CLI">
+    ```bash
+    npx shadcn@latest add https://snippets.thedevdavid.com/r/hono-cloudflare-better-auth-server.json
+    ```
+    
+    This will:
+    1. Install all required dependencies
+    2. Create the authentication API files
+    3. Set up Wrangler configuration
+    4. Create environment variable template
+  </Tab>
+  
+  <Tab value="Manual">
+    1. Install dependencies:
+    ```bash
+    npm install hono better-auth drizzle-orm postgres @hono/zod-validator
+    npm install -D wrangler drizzle-kit @cloudflare/workers-types
+    ```
+    
+    2. Copy all files from the registry
+    3. Update import paths as needed
+  </Tab>
+</Tabs>
+
+## Configuration
+
+### 1. Environment Variables
+
+Create `.dev.vars` for local development:
+
+```bash title=".dev.vars"
+# Authentication
+BETTER_AUTH_SECRET=your-secret-key-min-32-chars
+BETTER_AUTH_URL=http://localhost:8787
+
+# Email (use Resend, SendGrid, etc.)
+EMAIL_FROM_ADDRESS=noreply@yourdomain.com
+
+# CORS Origins (comma-separated)
+CORS_ORIGINS=http://localhost:3000,https://yourdomain.com
+
+# Cloudflare Turnstile (optional)
+CLOUDFLARE_TURNSTILE_SECRET_KEY=your-turnstile-secret
+```
+
+### 2. Database Setup
+
+<Steps>
+  <Step>
+    ### Create Hyperdrive Configuration
+    
+    ```bash
+    wrangler hyperdrive create my-hyperdrive \
+      --connection-string="postgresql://user:pass@host:5432/db"
+    ```
+    
+    Note the Hyperdrive ID returned.
+  </Step>
+  
+  <Step>
+    ### Update wrangler.toml
+    
+    ```toml title="wrangler.toml"
+    [[hyperdrive]]
+    binding = "HYPERDRIVE"
+    id = "your-hyperdrive-id-from-step-1"
+    ```
+  </Step>
+  
+  <Step>
+    ### Generate Database Schema
+    
+    ```bash
+    # Generate Better Auth schema
+    npx better-auth generate
+    
+    # Push to database
+    npx drizzle-kit push
+    ```
+  </Step>
+</Steps>
+
+### 3. Update Authentication Configuration
+
+Edit `lib/auth.ts` to customize:
+
+```ts title="lib/auth.ts"
+export const authConfig = {
+  // Email provider configuration
+  emailAndPassword: {
+    enabled: true,
+    requireEmailVerification: true,
+    sendResetPassword: async ({ user, url }) => {
+      // Implement email sending
+      await sendEmail({
+        to: user.email,
+        subject: "Reset your password",
+        body: `Click here to reset: ${url}`
+      });
+    },
+  },
+  
+  // Session configuration
+  session: {
+    expiresIn: 60 * 60 * 24 * 90, // 90 days
+    updateAfter: 60 * 60 * 24, // Update session after 1 day
+    cookieCache: {
+      enabled: true,
+      maxAge: 5 * 60, // Cache for 5 minutes
+    },
+  },
+  
+  // Advanced options
+  rateLimit: {
+    window: 10 * 60, // 10 minutes
+    max: 10, // 10 requests per window
+  },
+};
+```
+
+## Development
+
+### Local Development
+
+```bash
+# Start development server
+npm run dev
+
+# Your API is now available at http://localhost:8787
+```
+
+### API Endpoints
+
+The authentication API provides these endpoints:
+
+```
+POST   /api/auth/sign-up
+POST   /api/auth/sign-in/email
+POST   /api/auth/sign-out
+POST   /api/auth/forgot-password
+POST   /api/auth/reset-password
+POST   /api/auth/verify-email
+POST   /api/auth/resend-verification
+POST   /api/auth/change-email
+POST   /api/auth/change-password
+DELETE /api/auth/delete-account
+GET    /api/auth/session
+```
+
+### Testing Authentication
+
+<Tabs items={["cURL", "JavaScript", "TypeScript"]}>
+  <Tab value="cURL">
+    ```bash
+    # Sign up
+    curl -X POST http://localhost:8787/api/auth/sign-up \
+      -H "Content-Type: application/json" \
+      -d '{
+        "email": "user@example.com",
+        "password": "SecurePassword123!",
+        "name": "John Doe"
+      }'
+    
+    # Sign in
+    curl -X POST http://localhost:8787/api/auth/sign-in/email \
+      -H "Content-Type: application/json" \
+      -d '{
+        "email": "user@example.com",
+        "password": "SecurePassword123!"
+      }'
+    
+    # Check session
+    curl http://localhost:8787/api/auth/session \
+      -H "Cookie: better-auth.session_token=..."
+    ```
+  </Tab>
+  
+  <Tab value="JavaScript">
+    ```js
+    // Sign up
+    const signUp = await fetch('http://localhost:8787/api/auth/sign-up', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'user@example.com',
+        password: 'SecurePassword123!',
+        name: 'John Doe'
+      }),
+      credentials: 'include'
+    });
+    
+    // Sign in
+    const signIn = await fetch('http://localhost:8787/api/auth/sign-in/email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'user@example.com',
+        password: 'SecurePassword123!'
+      }),
+      credentials: 'include'
+    });
+    
+    // Check session
+    const session = await fetch('http://localhost:8787/api/auth/session', {
+      credentials: 'include'
+    });
+    ```
+  </Tab>
+  
+  <Tab value="TypeScript">
+    ```ts
+    import { authClient } from "better-auth/client";
+    
+    const client = authClient({
+      baseURL: "http://localhost:8787"
+    });
+    
+    // Sign up
+    await client.signUp.email({
+      email: "user@example.com",
+      password: "SecurePassword123!",
+      name: "John Doe"
+    });
+    
+    // Sign in
+    await client.signIn.email({
+      email: "user@example.com",
+      password: "SecurePassword123!"
+    });
+    
+    // Check session
+    const session = await client.session();
+    ```
+  </Tab>
+</Tabs>
+
+## Production Deployment
+
+### 1. Set Production Secrets
+
+```bash
+# Set production environment variables
+wrangler secret put BETTER_AUTH_SECRET
+wrangler secret put CLOUDFLARE_TURNSTILE_SECRET_KEY
+```
+
+### 2. Deploy to Cloudflare
+
+```bash
+# Deploy to production
+npm run deploy
+
+# Your API is now live at:
+# https://your-worker.your-subdomain.workers.dev
+```
+
+### 3. Custom Domain (Optional)
+
+1. Go to Workers & Pages → your worker → Settings → Domains & Routes
+2. Add custom domain: `auth.yourdomain.com`
+3. Update `BETTER_AUTH_URL` in production
+
+## Security Features
+
+### Rate Limiting
+
+The snippet includes built-in rate limiting:
+
+```toml title="wrangler.toml"
+[[rate_limiting]]
+binding = "AUTH_RATE_LIMITER"
+namespace_id = "1"
+simple = { limit = 10, period = 60 }
+
+[[rate_limiting]]
+binding = "SIGNUP_RATE_LIMITER"
+namespace_id = "2"
+simple = { limit = 5, period = 3600 }
+```
+
+### CORS Configuration
+
+Configure allowed origins:
+
+```ts title="lib/auth.ts"
+const allowedOrigins = env.CORS_ORIGINS?.split(',') || [
+  'http://localhost:3000',
+  'https://yourdomain.com',
+  'https://app.yourdomain.com'
+];
+```
+
+### Admin Roles
+
+Create admin users:
+
+```sql
+-- Promote user to admin
+UPDATE users 
+SET role = 'admin' 
+WHERE email = 'admin@yourdomain.com';
+```
+
+## Monitoring
+
+### Cloudflare Analytics
+
+Monitor your authentication API:
+1. Go to Workers & Pages → your worker → Analytics
+2. View requests, errors, and performance metrics
+
+### Custom Logging
+
+```ts title="Add logging"
+import { useAuth } from "./lib/use-auth";
+
+app.use("*", async (c, next) => {
+  const start = Date.now();
+  await next();
+  const duration = Date.now() - start;
+  
+  console.log({
+    method: c.req.method,
+    path: c.req.path,
+    status: c.res.status,
+    duration,
+    user: c.get("user")?.id
+  });
+});
+```
+
+## Common Issues
+
+### Database Connection Failed
+
+1. Check Hyperdrive configuration
+2. Verify connection string format
+3. Ensure database allows connections from Cloudflare
+
+### CORS Errors
+
+1. Add origin to `CORS_ORIGINS` environment variable
+2. Ensure credentials are included in requests
+3. Check preflight request handling
+
+### Session Not Persisting
+
+1. Verify cookie domain settings
+2. Check `sameSite` and `secure` settings
+3. Ensure client includes credentials
+
+## Next Steps
+
+<Cards>
+  <Card 
+    title="Server Documentation" 
+    href="/docs/snippets/cloudflare-better-auth/hono"
+    description="Deep dive into server implementation"
+  />
+  <Card 
+    title="Client Integration" 
+    href="/docs/snippets/cloudflare-better-auth/client/nextjs"
+    description="Connect Next.js app to your auth API"
+  />
+  <Card 
+    title="Advanced Features" 
+    href="/docs/snippets/cloudflare-better-auth/advanced"
+    description="OAuth, 2FA, and enterprise features"
+  />
+</Cards>

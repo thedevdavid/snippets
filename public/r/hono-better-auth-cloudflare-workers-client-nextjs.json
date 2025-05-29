@@ -1,0 +1,61 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "hono-better-auth-cloudflare-workers-client-nextjs",
+  "type": "registry:block",
+  "title": "Hono + Better Auth + Cloudflare Workers Client (Next.js)",
+  "author": "thedevdavid <https://github.com/thedevdavid>",
+  "description": "Client code for Better Auth with Hono and Cloudflare Workers (Next.js)",
+  "dependencies": [
+    "better-auth",
+    "next",
+    "better-auth"
+  ],
+  "files": [
+    {
+      "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/nextjs/auth-client.ts",
+      "content": "import { adminClient, magicLinkClient } from \"better-auth/client/plugins\";\nimport { nextCookies } from \"better-auth/next-js\";\nimport { createAuthClient } from \"better-auth/react\";\n\nexport const authClient = createAuthClient({\n  baseURL: process.env.NEXT_PUBLIC_BETTER_AUTH_URL,\n  plugins: [adminClient({}), magicLinkClient(), nextCookies()],\n  fetchOptions: {\n    credentials: \"include\",\n  },\n});\n\nexport const { signIn, signOut, signUp, useSession } = authClient;\n",
+      "type": "registry:lib",
+      "target": "lib/auth-client.ts"
+    },
+    {
+      "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/nextjs/auth-middleware.ts",
+      "content": "import { getSessionCookie } from \"better-auth/cookies\";\nimport type { NextRequest } from \"next/server\";\nimport { NextResponse } from \"next/server\";\n\nexport const protectedRoutes = [\"/dashboard\"];\n\nexport const isProtectedRoute = (request: NextRequest) => {\n  return protectedRoutes.some(\n    (route) =>\n      request.nextUrl.pathname === route ||\n      request.nextUrl.pathname.startsWith(route)\n  );\n};\n\nexport const authMiddleware = async (request: NextRequest) => {\n  const sessionCookie = getSessionCookie(request);\n\n  if (isProtectedRoute(request) && !sessionCookie) {\n    return NextResponse.redirect(new URL(\"/\", request.url));\n  }\n\n  return NextResponse.next();\n};\n",
+      "type": "registry:lib",
+      "target": "lib/auth-middleware.ts"
+    },
+    {
+      "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/nextjs/middleware.ts",
+      "content": "import { authMiddleware } from \"@/registry/new-york/blocks/hono-better-auth-cloudflare-workers/nextjs/auth-middleware\";\nimport type { NextRequest } from \"next/server\";\n\nexport async function middleware(request: NextRequest) {\n  return authMiddleware(request);\n}\n\nexport const config = {\n  matcher: [\n    \"/((?!_next/static|_next/image|favicon.ico|.*\\\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)\",\n  ],\n};\n",
+      "type": "registry:lib",
+      "target": "middleware.ts"
+    },
+    {
+      "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/nextjs/server.ts",
+      "content": "import * as schema from \"./db-schema\";\nimport { betterAuth } from \"better-auth\";\nimport { drizzleAdapter } from \"better-auth/adapters/drizzle\";\nimport { admin, captcha, magicLink } from \"better-auth/plugins\";\n\nexport type BetterAuthInstance = ReturnType<typeof betterAuth>;\n\nexport const auth = betterAuth({\n  // database: drizzleAdapter(db, {\n  //   schema,\n  //   provider: \"pg\",\n  //   usePlural: true,\n  //   debugLogs: true,\n  // }),\n  appName: \"App Name\",\n  user: {\n    changeEmail: {\n      enabled: true,\n      sendChangeEmailVerification: async ({ user, newEmail, url, token }) => {\n        console.log(user, newEmail, url, token);\n      },\n    },\n    deleteUser: {\n      enabled: true,\n      sendDeleteAccountVerification: async ({ user, url, token }) => {\n        console.log(user, url, token);\n      },\n      beforeDelete: async (user) => {\n        console.log(user);\n      },\n      afterDelete: async () => {},\n    },\n  },\n  session: {\n    expiresIn: 60 * 60 * 24 * 90, // 90 days\n    preserveSessionInDatabase: true,\n    cookieCache: {\n      enabled: true,\n      maxAge: 5 * 60,\n    },\n  },\n  emailAndPassword: {\n    enabled: true,\n    requireEmailVerification: true,\n    minPasswordLength: 8,\n    autoSignIn: true,\n    sendResetPassword: async ({ user, url, token }) => {\n      console.log(user, url, token);\n    },\n    resetPasswordTokenExpiresIn: 600, // 10 minutes\n  },\n  advanced: {\n    cookiePrefix: \"appname\",\n    useSecureCookies: true,\n    crossSubDomainCookies: {\n      enabled: true,\n      domains: [\".appname.com\", \".appname.dev\", \"localhost\", \"127.0.0.1\"],\n    },\n    defaultCookieAttributes: {\n      secure: true,\n      httpOnly: true,\n      sameSite: \"none\",\n      partitioned: true,\n    },\n    database: {\n      generateId: false,\n    },\n  },\n  baseURL: \"https://appname.com\",\n  emailVerification: {\n    sendVerificationEmail: async ({ user, url, token }) => {\n      console.log(user, url, token);\n    },\n    sendOnSignUp: true,\n    autoSignInAfterVerification: true,\n    expiresIn: 600, // 10 minutes\n  },\n  databaseHooks: {\n    user: {\n      create: {\n        before: async (user) => {\n          // Modify user data before creation\n          return { data: { ...user } };\n        },\n        after: async () => {\n          // Create organization for user, so they have their personal workspace\n        },\n      },\n      update: {\n        before: async (userData) => {\n          // Modify user data before update\n          return { data: { ...userData, updatedAt: new Date() } };\n        },\n        after: async () => {\n          // Perform actions after user update\n        },\n      },\n    },\n    session: {\n      // Session hooks\n    },\n    account: {\n      // Account hooks\n    },\n    verification: {\n      // Verification hooks\n    },\n  },\n  trustedOrigins: [\n    \"https://appname.com\",\n    \"https://app.appname.com\",\n    \"https://appname.dev\",\n    \"https://app.appname.dev\",\n    \"http://localhost:3000\",\n    \"http://127.0.0.1:3000\",\n    \"http://localhost:3001\",\n    \"http://127.0.0.1:3001\",\n  ],\n  rateLimit: {\n    window: 60,\n    max: 100,\n    customRules: {\n      \"/auth/signin\": {\n        window: 10,\n        max: 3,\n      },\n      \"/auth/signup\": {\n        window: 10,\n        max: 3,\n      },\n    },\n  },\n  plugins: [\n    admin({\n      adminRoles: [\"admin\"],\n      defaultRole: \"user\",\n    }),\n    captcha({\n      provider: \"cloudflare-turnstile\",\n      secretKey: process.env.CLOUDFLARE_TURNSTILE_SECRET_KEY ?? \"Forgot to set\",\n      endpoints: [\n        \"/auth/signin\",\n        \"/auth/signup\",\n        \"/auth/forget-password\",\n        \"/auth/reset-password\",\n        \"/auth/update-password\",\n      ],\n    }),\n    magicLink({\n      sendMagicLink: async (data, request) => {\n        console.log(data, request);\n      },\n      expiresIn: 10 * 60,\n      rateLimit: {\n        max: 10,\n        window: 10 * 60,\n      },\n      disableSignUp: true,\n    }),\n  ],\n});\n",
+      "type": "registry:lib",
+      "target": "lib/auth.ts"
+    },
+    {
+      "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/nextjs/get-session.ts",
+      "content": "import { betterFetch } from \"@better-fetch/fetch\";\nimport { auth } from \"@/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/auth\";\n\ntype BetterAuthSession = {\n  user: typeof auth.$Infer.Session.user | null;\n  session: typeof auth.$Infer.Session.session | null;\n};\n\n/**\n * Fetch the current Better Auth session.\n *\n * Designed for Next.js `middleware.ts` edge runtime where we cannot use\n * `authClient.getSession` (relies on browser APIs).\n * Also works in client and server components.\n *\n * @param options - Configuration options\n * @param options.cookie - Cookie header from the incoming request\n * @param options.baseURL - API base URL. Defaults to NEXT_PUBLIC_BETTER_AUTH_URL\n * @returns Promise containing session data and any error\n */\nexport async function getBetterAuthSession<\n  TSession = BetterAuthSession,\n>(options?: { cookie?: string; baseURL?: string }) {\n  const { cookie, baseURL = process.env.NEXT_PUBLIC_BETTER_AUTH_URL } =\n    options || {};\n\n  const { data, error } = await betterFetch<TSession>(\"/api/auth/get-session\", {\n    baseURL,\n    credentials: \"include\",\n    // Forward cookies so Better Auth can read the session\n    headers: cookie ? { cookie } : undefined,\n  });\n\n  return { data, error } as { data: TSession | null; error: Error | null };\n}\n",
+      "type": "registry:lib",
+      "target": "lib/get-session.ts"
+    },
+    {
+      "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/nextjs/.env.example",
+      "content": "BETTER_AUTH_SECRET= \"\"\nNEXT_PUBLIC_BETTER_AUTH_URL= \"\"\nCORS_ORIGIN= \"\"\nCLOUDFLARE_TURNSTILE_SECRET_KEY= \"\"\nEMAIL_FROM_ADDRESS= \"\"",
+      "type": "registry:lib",
+      "target": ".env.example"
+    }
+  ],
+  "categories": [
+    "auth",
+    "cookies",
+    "fullstack",
+    "hono",
+    "nextjs",
+    "cloudflare",
+    "workers",
+    "better-auth"
+  ]
+}

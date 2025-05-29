@@ -1,0 +1,21 @@
+{
+  "compatibility_date": "2025-05-27",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "src/index.ts",
+  "minify": true,
+  "name": "api",
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "localConnectionString": "postgres://postgres:postgres@localhost:54322/postgres",
+    },
+  ],
+  "observability": {
+    "enabled": true,
+  },
+  "upload_source_maps": true,
+  "placement": {
+    "mode": "smart",
+  },
+}
