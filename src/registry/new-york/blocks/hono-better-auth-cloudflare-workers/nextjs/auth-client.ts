@@ -4,7 +4,7 @@ import { createAuthClient } from "better-auth/react";
 
 export const authClient = createAuthClient({
   baseURL: process.env.NEXT_PUBLIC_BETTER_AUTH_URL,
-  plugins: [adminClient({}), magicLinkClient(), nextCookies()],
+  plugins: [adminClient(), magicLinkClient(), nextCookies()],
   fetchOptions: {
     credentials: "include",
   },

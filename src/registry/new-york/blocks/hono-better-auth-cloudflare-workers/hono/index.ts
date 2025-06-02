@@ -1,8 +1,8 @@
-import { getAuth } from "@/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/use-auth";
 import { Hono } from "hono";
 import { every } from "hono/combine";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import { getAuth } from "@/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/use-auth";
 import type { Env } from "@/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/env";
 import { auth } from "@/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/auth";
 

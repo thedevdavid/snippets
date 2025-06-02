@@ -1,4 +1,3 @@
-import { createClient } from "@/registry/new-york/blocks/subdomain-cookies/supabase-nextjs/lib/supabase/server";
 import {
   Card,
   CardContent,
@@ -17,6 +16,7 @@ import {
 } from "@/registry/new-york/ui/tabs";
 import { redirect } from "next/navigation";
 import { GalleryVerticalEnd } from "lucide-react";
+import { authClient } from "@/registry/new-york/blocks/hono-better-auth-cloudflare-workers/nextjs/auth-client";
 
 export async function AuthCard() {
   return (
@@ -37,18 +37,16 @@ export async function AuthCard() {
 
 export function EmailPasswordForm() {
   const loginWithEmailPassword = async (formData: FormData) => {
-    "use server";
-    const supabase = await createClient();
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { error } = await authClient.signIn.email({
       email: formData.get("email") as string,
       password: formData.get("password") as string,
+      callbackURL: "/dashboard",
     });
 
     if (error) {
       console.error(error);
+      redirect("/");
     }
-
-    redirect("/");
   };
 
   return (
@@ -105,17 +103,17 @@ export function EmailPasswordForm() {
 
 export function MagicLinkForm() {
   const loginWithMagicLink = async (formData: FormData) => {
-    "use server";
-    const supabase = await createClient();
-    const { data, error } = await supabase.auth.signInWithOtp({
+    const { error } = await authClient.signIn.magicLink({
       email: formData.get("email") as string,
+      callbackURL: "/dashboard",
     });
+
     if (error) {
       console.error(error);
+      redirect("/");
     }
-
-    redirect("/");
   };
+
   return (
     <Card>
       <CardHeader>

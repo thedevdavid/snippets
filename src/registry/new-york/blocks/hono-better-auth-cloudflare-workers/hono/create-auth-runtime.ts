@@ -1,32 +1,33 @@
+import * as schema from "@/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/db-schema";
 import { betterAuth } from "better-auth";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { admin, captcha, magicLink } from "better-auth/plugins";
 import {
   sendEmail,
   emailTemplates,
 } from "@/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/lib/email/resend";
-import {
-  createDatabaseAdapter,
-  type DatabaseAdapter,
-} from "@/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/lib/adapters";
 import type { Env } from "@/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/env";
 
 export type BetterAuthInstance = ReturnType<typeof betterAuth>;
 
-export interface CreateAuthConfig {
-  env: Env;
-  adapterType?: DatabaseAdapter;
-}
+export const createBetterAuth = (
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: any,
+  env: Env
+): BetterAuthInstance => {
+  // If db has a 'pool' property, it's a default adapter
+  // Otherwise, it's a Drizzle instance - use the drizzle adapter
+  const database = db.pool
+    ? db
+    : drizzleAdapter(db, {
+        schema,
+        provider: "pg",
+        usePlural: true,
+        debugLogs: true,
+      });
 
-export const createBetterAuthModular = ({
-  env,
-  adapterType = "drizzle",
-}: CreateAuthConfig): { auth: BetterAuthInstance; db: DatabaseAdapter } => {
-  const { adapter, db } = createDatabaseAdapter({ type: adapterType, env });
-
-  const FROM_EMAIL = env.EMAIL_FROM_ADDRESS ?? "team@mail.appname.com";
-
-  const auth = betterAuth({
-    database: adapter,
+  return betterAuth({
+    database,
     appName: "App Name",
     user: {
       changeEmail: {
@@ -53,9 +54,7 @@ export const createBetterAuthModular = ({
               <a href="${url}">Delete Account</a>
               <p>This link expires in 24 hours.</p>
             `,
-            text: `Confirm account deletion\n\nHi ${
-              user.name || "there"
-            },\n\nYou requested to delete your account. This action cannot be undone.\n\nClick the link below to confirm:\n${url}\n\nThis link expires in 24 hours.`,
+            text: `Confirm account deletion\n\nHi ${user.name || "there"},\n\nYou requested to delete your account. This action cannot be undone.\n\nClick the link below to confirm:\n${url}\n\nThis link expires in 24 hours.`,
           });
         },
         beforeDelete: async (user) => {
@@ -214,6 +213,4 @@ export const createBetterAuthModular = ({
       }),
     ],
   });
-
-  return { auth, db: db as unknown as DatabaseAdapter };
 };

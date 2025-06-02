@@ -6,6 +6,7 @@ export interface EmailOptions {
   subject: string;
   html?: string;
   text?: string;
+  from?: string;
 }
 
 export async function sendEmail(
@@ -19,9 +20,12 @@ export async function sendEmail(
 
   const resend = new Resend(env.RESEND_API_KEY);
 
+  const from =
+    options.from ?? env.EMAIL_FROM_ADDRESS ?? "team@mail.appname.com";
+
   try {
     await resend.emails.send({
-      from: env.EMAIL_FROM_ADDRESS || "noreply@example.com",
+      from,
       to: options.to,
       subject: options.subject,
       html: options.html,
@@ -33,7 +37,6 @@ export async function sendEmail(
   }
 }
 
-// Email templates
 export const emailTemplates = {
   verifyEmail: (url: string, name?: string) => ({
     subject: "Verify your email address",

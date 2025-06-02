@@ -1,56 +1,44 @@
 ---
 title: Introduction
-description: A collection of snippets I created while working on projects
+description: Production-ready authentication snippets for modern web applications
 ---
 
-This is a collection of snippets I created while working on projects. I've decided to share them here in case they might be useful to someone else.
-
-## Snippets
-
 <Cards>
   <Card
-    href="/docs/nextjs-supabase/snippets/subdomain-cookies/installation"
-    title="Subdomain Cookies"
-  >
-    Share cookies between subdomains so authentication works across them
-  </Card>
+    href="/docs/snippets"
+    title="Browse Snippets"
+    description="Authentication patterns for Next.js, Cloudflare Workers, and more"
+  />
   <Card
-    href="/docs/nextjs-supabase/snippets/organizations/installation"
-    title="Organizations"
-  >
-    Create and manage organizations
-  </Card>
+    href="/docs/components"
+    title="Components"
+    description="Pre-built UI components for authentication"
+  />
 </Cards>
 
-## Components
+## What is this?
 
-<Cards>
-  <Card href="/docs/nextjs-supabase/components/auth-card" title="Auth Card">
-    A card that displays the user's avatar and name, and a button to sign out
-  </Card>
-</Cards>
+A collection of production-ready authentication snippets that you can install with a single command. Each snippet includes:
 
-## How to use them?
+- Complete implementation files
+- Type safety with TypeScript
+- Best practices built-in
+- Easy customization
 
-All snippets are distributed using shadcn registry, so you can install them with `npx shadcn@latest add <snippet>` or you can install them manually.
+## Quick Start
 
-## How to contribute?
+```bash
+# Install a snippet
+npx shadcn@latest add [snippet-url]
 
-All snippets are open source, so you can contribute to them by opening a PR on [GitHub](https://github.com/thedevdavid/snippets).
+# Example: Subdomain cookies
+npx shadcn@latest add https://snippets.thedevdavid.com/r/next-supabase-subdomain-cookies.json
+```
+
+## Contributing
+
+All snippets are open source. Contribute on [GitHub](https://github.com/thedevdavid/snippets).
 
 ## License
 
-All snippets are licensed under the MIT license. See the [LICENSE](https://github.com/thedevdavid/snippets/blob/main/LICENSE) file for more details.
-
-## Updates
-
-I'll try to keep the snippets up to date with the latest version of the libraries. It may or may not happen quickly after new versions are released.
-
-## Thanks
-
-Thanks to [shadcn](https://ui.shadcn.com) for providing a great registry for snippets.
-
-<Cards>
-  <Card title="Get Started" href="/docs/get-started" />
-  <Card title="Snippets" href="/docs/snippets" />
-</Cards>
+MIT - see [LICENSE](https://github.com/thedevdavid/snippets/blob/main/LICENSE)

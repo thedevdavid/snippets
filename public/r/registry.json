@@ -105,22 +105,22 @@
         {
           "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/auth-schema.ts",
           "type": "registry:lib",
-          "target": "lib/auth-schema.ts"
+          "target": "db/schema/auth.ts"
         },
         {
           "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/db-schema.ts",
           "type": "registry:lib",
-          "target": "lib/db-schema.ts"
+          "target": "db/schema/index.ts"
         },
         {
           "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/auth.ts",
           "type": "registry:lib",
-          "target": "auth.ts"
+          "target": "lib/auth.ts"
         },
         {
-          "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/create-auth.ts",
+          "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/create-auth-runtime.ts",
           "type": "registry:lib",
-          "target": "lib/create-auth.ts"
+          "target": "lib/create-auth-runtime.ts"
         },
         {
           "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/create-db.ts",
@@ -145,7 +145,7 @@
         {
           "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/use-auth.ts",
           "type": "registry:lib",
-          "target": "lib/use-auth.ts"
+          "target": "lib/get-auth.ts"
         },
         {
           "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/lib/email/resend.ts",
@@ -155,22 +155,12 @@
         {
           "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/lib/adapters/drizzle-adapter.ts",
           "type": "registry:lib",
-          "target": "lib/adapters/drizzle-adapter.ts"
+          "target": "lib/auth/adapters/drizzle-adapter.ts"
         },
         {
           "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/lib/adapters/default-adapter.ts",
           "type": "registry:lib",
-          "target": "lib/adapters/default-adapter.ts"
-        },
-        {
-          "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/lib/adapters/index.ts",
-          "type": "registry:lib",
-          "target": "lib/adapters/index.ts"
-        },
-        {
-          "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/hono/lib/create-auth-modular.ts",
-          "type": "registry:lib",
-          "target": "lib/create-auth-modular.ts"
+          "target": "lib/auth/adapters/default-adapter.ts"
         }
       ]
     },
@@ -180,7 +170,7 @@
       "title": "Hono + Better Auth + Cloudflare Workers Client (Next.js)",
       "type": "registry:block",
       "description": "Client code for Better Auth with Hono and Cloudflare Workers (Next.js)",
-      "dependencies": ["better-auth", "next"],
+      "dependencies": ["better-auth", "next", "@better-fetch/fetch"],
       "author": "thedevdavid <https://github.com/thedevdavid>",
       "categories": [
         "auth",
@@ -202,6 +192,11 @@
           "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/nextjs/auth-middleware.ts",
           "type": "registry:lib",
           "target": "lib/auth-middleware.ts"
+        },
+        {
+          "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/nextjs/auth-card.tsx",
+          "type": "registry:component",
+          "target": "components/auth-card.tsx"
         },
         {
           "path": "src/registry/new-york/blocks/hono-better-auth-cloudflare-workers/nextjs/middleware.ts",

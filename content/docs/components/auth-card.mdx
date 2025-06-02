@@ -1,9 +1,7 @@
 ---
 title: Auth Card
-description: A card component for authentication
+description: Authentication card component with magic link and email/password
 ---
-
-## Demo
 
 import { OpenInV0Button } from "@/components/open-in-v0-button";
 import { AuthCard } from "@/registry/new-york/blocks/subdomain-cookies/supabase-nextjs/components/auth-card";
@@ -11,7 +9,7 @@ import { AuthCard } from "@/registry/new-york/blocks/subdomain-cookies/supabase-
 <div className="flex flex-col gap-4 border rounded-sm p-4 min-h-[450px] relative not-prose">
   <div className="flex items-center justify-between">
     <h2 className="text-sm text-muted-foreground sm:pl-3">
-      A login form with Supabase magic link auth
+      Authentication form with tabs
     </h2>
     <OpenInV0Button name="auth-card" className="w-fit" />
   </div>
@@ -23,7 +21,17 @@ import { AuthCard } from "@/registry/new-york/blocks/subdomain-cookies/supabase-
 ## Usage
 
 ```tsx
-import { AuthCard } from "@/registry/new-york/blocks/subdomain-cookies/supabase-nextjs/components/auth-card";
+import { AuthCard } from "@/components/auth-card";
 
 <AuthCard />;
 ```
+
+## Features
+
+- Magic link authentication
+- Email/password login
+- Tab-based UI
+- Server actions for form handling
+- Fully typed with TypeScript
+
+Part of the [Subdomain Cookies](/docs/snippets/subdomain-cookies/installation) snippet.

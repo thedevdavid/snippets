@@ -1,52 +1,16 @@
 ---
-title: Installation
-description: Enable authentication across subdomains by sharing cookies between your main domain and all its subdomains
+title: Subdomain Cookies Installation
+description: Share authentication across subdomains with Next.js and Supabase
 ---
 
-import { File, Folder, Files } from "fumadocs-ui/components/files";
-import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 import { Steps, Step } from "fumadocs-ui/components/steps";
 import { Callout } from "fumadocs-ui/components/callout";
-import { Cards, Card } from "fumadocs-ui/components/card";
 
-<Callout title="Use Case" type="info">
-  This snippet is perfect for SaaS applications where you need authentication to
-  work across multiple subdomains like `app.example.com`, `auth.example.com`,
-  and `api.example.com`.
-</Callout>
+## Installation
 
-## Overview
-
-The subdomain cookie snippet provides a complete authentication setup that shares cookies across all subdomains of your application. This enables seamless single sign-on (SSO) across different parts of your application hosted on different subdomains.
-
-### Key Features
-
-- 🔐 **Cross-subdomain authentication** - Login once, authenticated everywhere
-- 🍪 **Secure cookie configuration** - Properly configured for subdomain sharing
-- 🛡️ **Middleware protection** - Automatic route protection with session refresh
-- 📧 **Magic link authentication** - Passwordless login with OTP
-- 🎯 **Type-safe** - Full TypeScript support
-- ⚡ **Server Components ready** - Works with Next.js App Router
-
-### What's Included
-
-<Files>
-  <Folder name="app" defaultOpen>
-    <Folder name="auth" defaultOpen>
-      <File name="page.tsx" />
-    </Folder>
-  </Folder>
-  <Folder name="components" defaultOpen>
-    <File name="auth-card.tsx" />
-  </Folder>
-  <Folder name="utils/supabase" defaultOpen>
-    <File name="auth-config.ts" />
-    <File name="client.ts" />
-    <File name="middleware.ts" />
-    <File name="server.ts" />
-  </Folder>
-  <File name="middleware.ts" />
-</Files>
+```bash
+npx shadcn@latest add https://snippets.thedevdavid.com/r/next-supabase-subdomain-cookies.json
+```
 
 ## Prerequisites
 
@@ -54,128 +18,45 @@ The subdomain cookie snippet provides a complete authentication setup that share
   <Step>
     ### Supabase Project
 
-    You need a Supabase project with authentication enabled. [Create one here](https://supabase.com/dashboard).
+    Create a project at [supabase.com](https://supabase.com/dashboard)
 
   </Step>
 
   <Step>
     ### Environment Variables
 
-    Add these to your `.env.local` file:
-
-    ```bash
+    ```bash title=".env.local"
     NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
     NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
     COOKIE_DOMAIN=.yourdomain.com # Note the leading dot!
     ```
 
     <Callout type="warning">
-      The `COOKIE_DOMAIN` must start with a dot (.) to enable subdomain sharing. For local development, use `.localhost`.
+      `COOKIE_DOMAIN` must start with a dot (.) for subdomain sharing
     </Callout>
-
-  </Step>
-
-  <Step>
-    ### DNS Configuration
-
-    Ensure your subdomains are properly configured:
-    - `auth.yourdomain.com` - For authentication pages
-    - `app.yourdomain.com` - For your main application
-    - `api.yourdomain.com` - For your API (if applicable)
 
   </Step>
 </Steps>
 
-## Installation
-
-<Tabs items={["CLI", "Manual"]}>
-  <Tab value="CLI">
-    ```bash
-    npx shadcn@latest add https://snippets.thedevdavid.com/r/next-supabase-subdomain-cookies.json
-    ```
-
-    This will:
-    1. Install all required dependencies
-    2. Add the authentication utilities
-    3. Create the auth page and components
-    4. Set up the middleware
-
-  </Tab>
-
-  <Tab value="Manual">
-    1. Install dependencies:
-    ```bash
-    npm install @supabase/ssr
-    ```
-
-    2. Copy all files from the registry to your project
-    3. Update import paths as needed
-
-  </Tab>
-</Tabs>
-
 ## Configuration
 
-### 1. Update Middleware
+### 1. Supabase Dashboard
 
-The middleware is already configured, but you may want to customize protected routes:
+Go to Authentication → Settings and add redirect URLs:
 
-```ts title="middleware.ts"
-import { updateSession } from "@/utils/supabase/middleware";
-import type { NextRequest } from "next/server";
-
-export async function middleware(request: NextRequest) {
-  return await updateSession(request);
-}
-
-export const config = {
-  matcher: [
-    // Add or remove routes as needed
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
-  ],
-};
+```
+https://*.yourdomain.com/**
+http://*.localhost:3000/** # for development
 ```
 
-### 2. Configure Cookie Domain
+### 2. Update Middleware (Optional)
 
-Update the `COOKIE_DOMAIN` in your environment:
+Customize protected routes in `middleware.ts`:
 
-<Tabs items={["Production", "Staging", "Development"]}>
-  <Tab value="Production">
-    ```bash
-    COOKIE_DOMAIN=.yourdomain.com
-    ```
-  </Tab>
-
-{" "}
-
-<Tab value="Staging">```bash COOKIE_DOMAIN=.staging.yourdomain.com ```</Tab>
-
-  <Tab value="Development">
-    ```bash
-    COOKIE_DOMAIN=.localhost
-    ```
-
-    <Callout type="info">
-      For local development, you can access your app via subdomains like `app.localhost:3000` and `auth.localhost:3000`.
-    </Callout>
-
-  </Tab>
-</Tabs>
-
-### 3. Customize Auth Options
-
-Edit `utils/supabase/auth-config.ts` to customize cookie settings:
-
-```ts title="utils/supabase/auth-config.ts"
-export const COOKIE_OPTIONS: CookieOptionsWithName = {
-  ...DEFAULT_COOKIE_OPTIONS,
-  name: "auth_session",
-  domain: process.env.COOKIE_DOMAIN ?? ".localhost",
-  path: "/",
-  maxAge: 60 * 60 * 24 * 365, // 1 year
-  sameSite: "lax" as const,
-  secure: process.env.NODE_ENV === "production", // HTTPS only in production
+```ts title="middleware.ts"
+// Already configured, but you can modify the matcher
+export const config = {
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
 ```
 
@@ -187,17 +68,13 @@ export const COOKIE_OPTIONS: CookieOptionsWithName = {
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 
-export default async function DashboardPage() {
+export default async function Dashboard() {
   const supabase = await createClient();
 
   const {
     data: { user },
-    error,
   } = await supabase.auth.getUser();
-
-  if (error || !user) {
-    redirect("/auth");
-  }
+  if (!user) redirect("/auth");
 
   return <div>Welcome, {user.email}!</div>;
 }
@@ -205,13 +82,13 @@ export default async function DashboardPage() {
 
 ### Client Components
 
-```tsx title="components/user-menu.tsx"
+```tsx title="components/sign-out.tsx"
 "use client";
 
 import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 
-export function UserMenu() {
+export function SignOut() {
   const router = useRouter();
   const supabase = createClient();
 
@@ -224,123 +101,45 @@ export function UserMenu() {
 }
 ```
 
-### Server Actions
-
-```tsx title="app/actions.ts"
-"use server";
-
-import { createClient } from "@/utils/supabase/server";
-import { revalidatePath } from "next/cache";
-
-export async function updateProfile(formData: FormData) {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw new Error("Not authenticated");
-  }
-
-  const { error } = await supabase
-    .from("profiles")
-    .update({
-      full_name: formData.get("full_name"),
-    })
-    .eq("id", user.id);
-
-  if (error) throw error;
-
-  revalidatePath("/profile");
-}
-```
-
-## Testing Subdomain Authentication
+## Testing
 
 <Steps>
   <Step>
-    ### Local Development Setup
+    ### Local Setup
 
-    1. Add to `/etc/hosts` (Mac/Linux) or `C:\Windows\System32\drivers\etc\hosts` (Windows):
+    Add to your hosts file:
     ```
     127.0.0.1 app.localhost
     127.0.0.1 auth.localhost
-    127.0.0.1 api.localhost
     ```
-
-    2. Access your app:
-    - Main app: `http://app.localhost:3000`
-    - Auth pages: `http://auth.localhost:3000`
 
   </Step>
 
   <Step>
-    ### Verify Cookie Sharing
+    ### Verify
 
     1. Sign in on `auth.localhost:3000`
     2. Navigate to `app.localhost:3000`
-    3. Check browser DevTools → Application → Cookies
-    4. You should see the auth cookie with domain `.localhost`
+    3. You should remain authenticated
 
   </Step>
 </Steps>
 
 ## Common Issues
 
-### Cookies Not Sharing
+**Cookies not sharing?**
 
-1. **Check domain configuration**: Ensure `COOKIE_DOMAIN` starts with a dot
-2. **Verify DNS**: All subdomains must resolve correctly
-3. **Browser restrictions**: Some browsers have restrictions on `.localhost`
+- Check `COOKIE_DOMAIN` starts with `.`
+- Verify redirect URLs in Supabase include wildcards
+- Use HTTPS in production
 
-### Session Not Persisting
+**Session not persisting?**
 
-1. **Middleware configuration**: Ensure middleware runs on all routes
-2. **Cookie settings**: Check `sameSite` and `secure` settings
-3. **Supabase configuration**: Verify your Supabase URL settings
+- Check middleware is running on all routes
+- Verify cookie settings match your domain
 
-### TypeScript Errors
+## Resources
 
-Ensure your `tsconfig.json` includes the correct paths:
-
-```json title="tsconfig.json"
-{
-  "compilerOptions": {
-    "paths": {
-      "@/*": ["./src/*"],
-      "@/utils/*": ["./utils/*"],
-      "@/components/*": ["./components/*"]
-    }
-  }
-}
-```
-
-## Security Considerations
-
-<Callout type="warning" title="Important Security Notes">
-  1. Always use HTTPS in production for secure cookies 2. Keep your
-  `SUPABASE_SERVICE_ROLE_KEY` secret and never expose it to the client 3.
-  Validate user permissions on both client and server 4. Use Row Level Security
-  (RLS) in Supabase
-</Callout>
-
-## Next Steps
-
-<Cards>
-  <Card
-    title="Next.js Integration"
-    href="/docs/snippets/subdomain-cookies/nextjs"
-    description="Learn about Next.js specific features and optimizations"
-  />
-  <Card
-    title="Supabase Setup"
-    href="/docs/snippets/subdomain-cookies/supabase"
-    description="Configure Supabase for optimal subdomain authentication"
-  />
-  <Card
-    title="Advanced Patterns"
-    href="/docs/snippets/subdomain-cookies/advanced"
-    description="Multi-tenant setups, custom domains, and more"
-  />
-</Cards>
+- [Supabase Docs](https://supabase.com/docs)
+- [Next.js Middleware](https://nextjs.org/docs/app/building-your-application/routing/middleware)
+- [HTTP Cookies](https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies)
