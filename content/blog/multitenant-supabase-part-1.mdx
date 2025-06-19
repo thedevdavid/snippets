@@ -1,0 +1,126 @@
+---
+title: Building a multi-tenant organization system with Supabase part 1
+description: Setting up a new Next.js app, connecting to Supabase, and setting up cross-domain authentication cookies.
+date: 2025-05-29
+author: thedevdavid
+---
+
+import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
+import Link from "next/link";
+
+<Accordions type="single">
+  <Accordion title="Series navigation">
+    <ul>
+      <li>
+        <Link href="/blog/multitenant-supabase-part-1">Part 1: Project Setup & Cross-Domain cookies</Link>
+      </li>
+      <li>
+        <Link href="/blog/multitenant-supabase-part-2">Part 2: Database schema</Link>
+      </li>
+      <li>
+        Part 3: Auth claims and permissions
+      </li>
+      <li>
+        Part 4: Enhanced subdomain routing and multi-tenant middleware
+      </li>
+    </ul>
+  </Accordion>
+  <Accordion title="Series description">
+    In this series, we're building a multi-tenant organization system using Supabase and Next.js. Functionality includes:
+
+    - Supabase authentication
+    - Organization management
+    - User invitations
+    - Organization-wide permissions
+    - App-wide permissions
+    - Cross-domain authentication cookies
+    - UI components for authentication, organization management, and more
+
+  </Accordion>
+</Accordions>
+
+In this first part, we'll hit the ground running with a quick project setup and implementing cross-domain authentication.
+
+## Supabase project setup
+
+First, let's create a new Supabase project.
+
+I like to create a local project first using [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started). For now we just want the default project with the default credentials. Use `supabase init` to create a new project. Then start the database using `supabase start` and copy the URL and anon key.
+
+Or you can choose to start with a cloud project too by creating a new project at [supabase.com/dashboard](https://supabase.com/dashboard).
+
+## Next.js project setup
+
+### Option A: Quick Start
+
+If you want to skip the Next.js project setup and Supabase connection, you can get a head start with the [Supabase Subdomain Cookies snippet](/docs/snippets/subdomain-cookies/installation). To do this, run the following command to create a new Next.js project.
+
+```bash
+npx shadcn@latest add https://snippets.thedevdavid.com/r/next-supabase-subdomain-cookies.json
+```
+
+This will set up a new Next.js project with shadcn/ui and Supabase authentication.
+
+### Option B: Manual setup
+
+If you want to setup the project manually, you'll need to create a new Next.js project, then install and configure the Supabase dependencies.
+
+#### Step 1: Create a new Next.js project:
+
+```bash
+npx create-next-app@latest my-app --typescript --tailwind --app
+cd my-app
+```
+
+#### Step 2: Install the Supabase dependencies:
+
+```bash
+npm install @supabase/ssr @supabase/supabase-js
+```
+
+#### Step 3: Configure the Supabase client:
+
+Follow the official [Supabase server-side auth guide](https://supabase.com/docs/guides/auth/server-side/nextjs) to setup the Supabase clients.
+
+#### Step 4: Cross-domain cookies
+
+One of the key features we need for a multi-tenant system is the ability to share authentication across subdomains. This means if a user logs in at `auth.yourdomain.com`, they should remain authenticated when navigating to `app.yourdomain.com` or `yourdomain.com`.
+
+Add this to your `.env.local` file:
+
+```bash
+COOKIE_DOMAIN=.yourdomain.com # Note the leading dot!
+```
+
+Create a cookie configuration file `utils/supabase/auth-config.ts` and add the following:
+
+```typescript title="utils/supabase/auth-config.ts"
+import type { CookieOptionsWithName } from "@supabase/ssr";
+import { DEFAULT_COOKIE_OPTIONS } from "@supabase/ssr";
+
+export const COOKIE_OPTIONS: CookieOptionsWithName = {
+  ...DEFAULT_COOKIE_OPTIONS,
+  name: "auth_session",
+  domain: process.env.COOKIE_DOMAIN ?? ".localhost",
+  path: "/",
+  maxAge: 60 * 60 * 24 * 365, // 1 year
+  sameSite: "lax" as const,
+};
+```
+
+Modify `utils/supabase/server.ts` and `utils/supabase/middleware.ts` to include the cookie options.
+
+```typescript title="utils/supabase/middleware.ts and utils/supabase/server.ts"
+return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookieOptions: COOKIE_OPTIONS,
+```
+
+That's it for the project setup. In part 2 we'll start the heavy lifting with the database schema.
+
+- Setting up the organization data model
+- Implementing organization creation and management
+- Handling user invitations and roles
+- Creating organization-specific settings
