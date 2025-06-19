@@ -99,7 +99,10 @@ export default async function Page(props: {
               )}
 
               <div>
-                <ShareButtons title={page.data.title} />
+                <ShareButtons
+                  title={page.data.title}
+                  url={`https://snippets.thedevdavid.com/blog/${page.slugs[0]}`}
+                />
               </div>
 
               <div className="pt-8">

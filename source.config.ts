@@ -7,7 +7,7 @@ import {
   frontmatterSchema,
   metaSchema,
 } from "fumadocs-mdx/config";
-import z from "zod";
+import { z } from "zod/v3";
 
 const generator = createGenerator();
 
@@ -22,13 +22,17 @@ export const docs = defineDocs({
   },
 });
 
+const blogSchema = z.lazy(() =>
+  frontmatterSchema.extend({
+    author: z.string(),
+    date: z.coerce.date(),
+  })
+);
+
 export const blog = defineCollections({
   type: "doc",
   dir: "content/blog",
-  schema: frontmatterSchema.extend({
-    author: z.string(),
-    date: z.string().date().or(z.date()),
-  }),
+  schema: blogSchema,
 });
 
 export default defineConfig({
