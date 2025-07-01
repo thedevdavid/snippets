@@ -1,0 +1,1117 @@
+---
+title: Building a multi-tenant organization system with Supabase part 3
+description: Implementing auth claims, permissions, and Row Level Security for secure multi-tenant access control.
+date: 2025-06-26
+author: thedevdavid
+---
+
+import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
+import Link from "next/link";
+
+<Accordions type="single">
+  <Accordion title="Series navigation">
+    <ul>
+      <li>
+        <Link href="/blog/multitenant-supabase-part-1">Part 1: Project Setup & Cross-Domain cookies</Link>
+      </li>
+      <li>
+        <Link href="/blog/multitenant-supabase-part-2">Part 2: Database schema setup</Link>
+      </li>
+      <li>
+        <Link href="/blog/multitenant-supabase-part-3">Part 3: Auth claims and permissions</Link>
+      </li>
+      <li>
+        Part 4: Enhanced subdomain routing and multi-tenant middleware
+      </li>
+      <li>
+        Part 5: User and organization settings
+      </li>
+    </ul>
+  </Accordion>
+  <Accordion title="Series description">
+    In this series, we're building a multi-tenant organization system using Supabase and Next.js. Functionality includes:
+
+    - Supabase authentication
+    - Organization management
+    - User invitations
+    - Organization-wide permissions
+    - Cross-domain authentication cookies
+    - UI components for authentication, organization management, and more
+
+  </Accordion>
+</Accordions>
+
+## Introduction
+
+In [Part 2](/blog/multitenant-supabase-part-2), we built the complete database schema for our multi-tenant system. Now we'll implement the authorization layer that makes it secure and functional.
+
+This part covers the critical security components that prevent data leakage between tenants and ensure users can only access what they're supposed to. We'll implement:
+
+- **JWT Claims Integration** - Custom auth hooks that inject tenant context
+- **Permission System** - Account-based authorization checks
+- **Row Level Security** - Database-level access control policies
+- **Testing Strategies** - Ensuring tenant isolation works correctly
+- **Common Pitfalls** - Avoiding multi-tenant security mistakes
+
+## Authorization System Overview
+
+Our authorization system works on multiple levels:
+
+1. **JWT Claims** - User's account memberships and roles in the token
+2. **Permission Functions** - Server-side authorization checks
+3. **RLS Policies** - Database-level row filtering
+4. **Client Guards** - UI-level permission enforcement
+
+Let's implement each layer.
+
+### Step 4: Set Up Auth Hooks
+
+This is where Supabase really shines - we can hook into the auth system:
+
+```sql
+-- Function to handle new user registration
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+DECLARE
+  personal_account_id uuid;
+  username text;
+  unique_username text;
+BEGIN
+  -- Extract username from metadata or email
+  username := COALESCE(NEW.raw_user_meta_data->>'username', split_part(NEW.email, '@', 1));
+
+  -- Generate unique username
+  unique_username := username;
+  WHILE EXISTS (SELECT 1 FROM public.user_profiles WHERE username = unique_username) LOOP
+    unique_username := username || '_' || substr(gen_random_uuid()::text, 1, 4);
+  END LOOP;
+
+  -- Create user profile
+  INSERT INTO public.user_profiles (id, email, username, email_status)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    unique_username,
+    CASE WHEN NEW.email_confirmed_at IS NULL THEN 'pending' ELSE 'confirmed' END
+  );
+
+  -- Create personal account with default client app role
+  INSERT INTO accounts.accounts (name, owner_id, type, slug, status, app_role)
+  SELECT
+    unique_username,
+    NEW.id,
+    act.id,
+    unique_username,
+    acs.id,
+    aar.id
+  FROM accounts.account_types act,
+       accounts.account_statuses acs,
+       accounts.account_app_roles aar
+  WHERE act.slug = 'personal'
+    AND acs.slug = 'active'
+    AND aar.slug = 'client'
+  RETURNING id INTO personal_account_id;
+
+  -- Add owner membership
+  INSERT INTO accounts.account_members (account_id, user_id, role_id, membership_status)
+  SELECT personal_account_id, NEW.id, ar.id, acs.id
+  FROM accounts.account_roles ar, accounts.account_statuses acs
+  WHERE ar.slug = 'owner' AND acs.slug = 'active';
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Create the trigger
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+```
+
+### Step 5: Configure Auth Claims Hook
+
+In your Supabase dashboard, go to **Authentication > Hooks** and set up the custom access token hook:
+
+```sql
+CREATE OR REPLACE FUNCTION public.custom_access_token_hook(event jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+  claims jsonb;
+  user_accounts jsonb;
+BEGIN
+  -- Get user's account memberships with account app roles
+  SELECT jsonb_object_agg(
+    am.account_id::text,
+    jsonb_build_object(
+      'role', ar.slug,
+      'account_name', a.name,
+      'account_slug', a.slug,
+      'status', ams.slug,
+      'app_role', aar.slug,
+      'app_permissions', aar.permissions
+    )
+  ) INTO user_accounts
+  FROM accounts.account_members am
+  JOIN accounts.accounts a ON am.account_id = a.id
+  JOIN accounts.account_roles ar ON am.role_id = ar.id
+  JOIN accounts.account_statuses ams ON am.membership_status = ams.id
+  JOIN accounts.account_app_roles aar ON a.app_role = aar.id
+  WHERE am.user_id = (event->>'user_id')::uuid
+  AND ams.slug = 'active';
+
+  claims := event->'claims';
+
+  -- Add custom claims
+  claims := jsonb_set(claims, '{app_metadata,accounts}', COALESCE(user_accounts, '{}'));
+
+  RETURN jsonb_set(event, '{claims}', claims);
+END;
+$$;
+```
+
+## 1. JWT Claims Integration
+
+### Custom Access Token Hook
+
+Supabase allows us to inject custom data into JWT tokens. This is where we add the user's account memberships and roles:
+
+```sql
+CREATE OR REPLACE FUNCTION public.custom_access_token_hook(event jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+  claims jsonb;
+  user_accounts jsonb;
+BEGIN
+  -- Get user's account memberships
+  SELECT jsonb_object_agg(
+    am.account_id::text,
+    jsonb_build_object(
+      'role', acr.slug,
+      'account_name', a.name,
+      'account_slug', a.slug,
+      'status', ams.slug
+    )
+  ) INTO user_accounts
+  FROM accounts.account_members am
+  JOIN accounts.accounts a ON am.account_id = a.id
+  JOIN accounts.account_roles acr ON am.role_id = acr.id
+  JOIN accounts.account_statuses ams ON am.membership_status = ams.id
+  WHERE am.user_id = (event->>'user_id')::uuid
+  AND ams.slug = 'active';
+
+  claims := event->'claims';
+
+  -- Add custom claims to app_metadata
+  claims := jsonb_set(
+    claims,
+    '{app_metadata}',
+    COALESCE(claims->'app_metadata', '{}') || jsonb_build_object(
+      'accounts', COALESCE(user_accounts, '{}')
+    )
+  );
+
+  RETURN jsonb_set(event, '{claims}', claims);
+END;
+$$;
+
+-- Grant necessary permissions
+GRANT EXECUTE ON FUNCTION public.custom_access_token_hook TO supabase_auth_admin;
+```
+
+### Dashboard Configuration
+
+In your Supabase dashboard:
+
+1. Go to **Authentication > Hooks**
+2. Create a new hook for **Custom Access Token**
+3. Select the `custom_access_token_hook` function
+4. Enable the hook
+
+Now every JWT will include the user's account memberships and roles.
+
+## 2. Permission System
+
+### Account-Level Authorization
+
+For checking permissions within a specific account:
+
+```sql
+CREATE OR REPLACE FUNCTION public.authorize_account(
+  requested_permission text,
+  account_id uuid
+)
+RETURNS boolean
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  _user_id uuid;
+  _jwt jsonb;
+  _accounts jsonb;
+  _account_role text;
+  _account_app_role text;
+  _app_permissions jsonb;
+BEGIN
+  _user_id := auth.uid();
+  IF _user_id IS NULL OR account_id IS NULL THEN
+    RETURN FALSE;
+  END IF;
+
+  _jwt := auth.jwt();
+  _accounts := _jwt -> 'app_metadata' -> 'accounts';
+
+  -- Get user's role and app role in this account
+  _account_role := _accounts -> account_id::text ->> 'role';
+  _account_app_role := _accounts -> account_id::text ->> 'app_role';
+  _app_permissions := _accounts -> account_id::text -> 'app_permissions';
+
+  -- Check account app-level permissions first
+  IF _app_permissions ? requested_permission THEN
+    RETURN TRUE;
+  END IF;
+
+  -- Check admin account privileges
+  IF _account_app_role = 'admin' AND requested_permission LIKE 'app:%' THEN
+    RETURN TRUE;
+  END IF;
+
+  -- Check account membership-level permissions
+  CASE _account_role
+    WHEN 'owner' THEN
+      RETURN requested_permission IN ('account:read', 'account:write', 'account:admin', 'account:delete');
+    WHEN 'admin' THEN
+      RETURN requested_permission IN ('account:read', 'account:write', 'account:admin');
+    WHEN 'member' THEN
+      RETURN requested_permission IN ('account:read', 'account:write');
+    WHEN 'guest' THEN
+      RETURN requested_permission = 'account:read';
+    ELSE
+      RETURN FALSE;
+  END CASE;
+
+  RETURN FALSE;
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE LOG 'Error in authorize_account function: %', SQLERRM;
+    RETURN FALSE;
+END;
+$$;
+```
+
+### App-Level Authorization
+
+For checking app-wide permissions based on account app roles:
+
+```sql
+CREATE OR REPLACE FUNCTION public.authorize_app(requested_permission text)
+RETURNS boolean
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  _user_id uuid;
+  _jwt jsonb;
+  _accounts jsonb;
+  _account_id text;
+  _account_info jsonb;
+  _app_permissions jsonb;
+BEGIN
+  _user_id := auth.uid();
+  IF _user_id IS NULL THEN
+    RETURN FALSE;
+  END IF;
+
+  _jwt := auth.jwt();
+  _accounts := _jwt -> 'app_metadata' -> 'accounts';
+
+  -- Check all user's accounts for the requested permission
+  FOR _account_id IN SELECT jsonb_object_keys(_accounts) LOOP
+    _account_info := _accounts -> _account_id;
+    _app_permissions := _account_info -> 'app_permissions';
+
+    -- Check if this account grants the requested permission
+    IF _app_permissions ? requested_permission THEN
+      RETURN TRUE;
+    END IF;
+
+    -- Special case: admin accounts get broad app permissions
+    IF _account_info ->> 'app_role' = 'admin' AND requested_permission LIKE 'app:%' THEN
+      RETURN TRUE;
+    END IF;
+  END LOOP;
+
+  RETURN FALSE;
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE LOG 'Error in authorize_app function: %', SQLERRM;
+    RETURN FALSE;
+END;
+$$;
+```
+
+### Membership Validation
+
+Check if a user is a member of a specific account:
+
+```sql
+CREATE OR REPLACE FUNCTION public.is_account_member(account_id uuid)
+RETURNS boolean
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  _user_id uuid;
+  _jwt jsonb;
+  _accounts jsonb;
+BEGIN
+  _user_id := auth.uid();
+  IF _user_id IS NULL OR account_id IS NULL THEN
+    RETURN FALSE;
+  END IF;
+
+  _jwt := auth.jwt();
+  _accounts := _jwt -> 'app_metadata' -> 'accounts';
+
+  -- Check if account exists in user's accounts and is active
+  RETURN (_accounts -> account_id::text ->> 'status') = 'active';
+EXCEPTION
+  WHEN OTHERS THEN
+    RETURN FALSE;
+END;
+$$;
+```
+
+### Account Role Check
+
+Get the user's role in a specific account:
+
+```sql
+CREATE OR REPLACE FUNCTION public.get_account_role(account_id uuid)
+RETURNS text
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  _user_id uuid;
+  _jwt jsonb;
+  _accounts jsonb;
+BEGIN
+  _user_id := auth.uid();
+  IF _user_id IS NULL OR account_id IS NULL THEN
+    RETURN null;
+  END IF;
+
+  _jwt := auth.jwt();
+  _accounts := _jwt -> 'app_metadata' -> 'accounts';
+
+  -- Return user's role in this account
+  RETURN _accounts -> account_id::text ->> 'role';
+EXCEPTION
+  WHEN OTHERS THEN
+    RETURN null;
+END;
+$$;
+```
+
+### Account App Role Check
+
+Get the app role of a specific account:
+
+```sql
+CREATE OR REPLACE FUNCTION public.get_account_app_role(account_id uuid)
+RETURNS text
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  _user_id uuid;
+  _jwt jsonb;
+  _accounts jsonb;
+BEGIN
+  _user_id := auth.uid();
+  IF _user_id IS NULL OR account_id IS NULL THEN
+    RETURN null;
+  END IF;
+
+  _jwt := auth.jwt();
+  _accounts := _jwt -> 'app_metadata' -> 'accounts';
+
+  -- Return account's app role
+  RETURN _accounts -> account_id::text ->> 'app_role';
+EXCEPTION
+  WHEN OTHERS THEN
+    RETURN null;
+END;
+$$;
+```
+
+## 3. Row Level Security Policies
+
+### User Profiles Policies
+
+```sql
+-- Users can view their own profile
+CREATE POLICY "Users can view own profile" ON public.user_profiles
+  FOR SELECT TO authenticated
+  USING (auth.uid() = id);
+
+-- Users can update their own profile
+CREATE POLICY "Users can update own profile" ON public.user_profiles
+  FOR UPDATE TO authenticated
+  USING (auth.uid() = id);
+```
+
+### Account Access Control
+
+```sql
+-- Members can view accounts they belong to
+CREATE POLICY "Members can view their accounts" ON accounts.accounts
+  FOR SELECT TO authenticated
+  USING (is_account_member(id) = TRUE);
+
+-- Only owners and admins can update accounts
+CREATE POLICY "Account owners and admins can update" ON accounts.accounts
+  FOR UPDATE TO authenticated
+  USING (authorize_account('account:admin', id) = TRUE);
+
+-- Only owners can delete accounts
+CREATE POLICY "Account owners can delete" ON accounts.accounts
+  FOR DELETE TO authenticated
+  USING (authorize_account('account:delete', id) = TRUE);
+
+-- Authenticated users can create new accounts
+CREATE POLICY "Users can create accounts" ON accounts.accounts
+  FOR INSERT TO authenticated
+  WITH CHECK (auth.uid() = owner_id);
+```
+
+### Membership Management
+
+```sql
+-- Users can view memberships for accounts they belong to
+CREATE POLICY "Users can view account memberships" ON accounts.account_members
+  FOR SELECT TO authenticated
+  USING (
+    user_id = auth.uid()
+    OR
+    is_account_member(account_id) = TRUE
+  );
+
+-- Account owners and admins can manage memberships
+CREATE POLICY "Account admins can manage memberships" ON accounts.account_members
+  FOR INSERT TO authenticated
+  WITH CHECK (
+    authorize_account('account:admin', account_id) = TRUE
+  );
+
+CREATE POLICY "Account admins can update memberships" ON accounts.account_members
+  FOR UPDATE TO authenticated
+  USING (
+    authorize_account('account:admin', account_id) = TRUE
+  );
+
+-- Only owners can delete memberships (or users leaving themselves)
+CREATE POLICY "Account owners can delete memberships" ON accounts.account_members
+  FOR DELETE TO authenticated
+  USING (
+    authorize_account('account:delete', account_id) = TRUE
+    OR user_id = auth.uid()
+  );
+```
+
+### Domain Verification Policies
+
+```sql
+-- Account members can view domains
+CREATE POLICY "Account members can view domains" ON public.domains
+  FOR SELECT TO authenticated
+  USING (
+    is_account_member(account_id) = TRUE
+  );
+
+-- Account admins can manage domains
+CREATE POLICY "Account admins can manage domains" ON public.domains
+  FOR ALL TO authenticated
+  USING (
+    authorize_account('account:admin', account_id) = TRUE
+  );
+```
+
+## 4. Testing Strategies
+
+### Multi-Tenant Data Isolation Tests
+
+The most critical tests ensure tenant data isolation:
+
+```sql
+-- Test script for data isolation
+DO $$
+DECLARE
+  user1_id uuid := gen_random_uuid();
+  user2_id uuid := gen_random_uuid();
+  account1_id uuid := gen_random_uuid();
+  account2_id uuid := gen_random_uuid();
+  owner_role_id uuid;
+  active_status_id uuid;
+BEGIN
+  -- Get role and status IDs
+  SELECT id INTO owner_role_id FROM accounts.account_roles WHERE slug = 'owner';
+  SELECT id INTO active_status_id FROM accounts.account_statuses WHERE slug = 'active';
+
+  -- Create test users and accounts
+  INSERT INTO auth.users (id, email) VALUES
+    (user1_id, 'user1@test.com'),
+    (user2_id, 'user2@test.com');
+
+  INSERT INTO accounts.accounts (id, name, owner_id, slug, status) VALUES
+    (account1_id, 'Account 1', user1_id, 'account-1', active_status_id),
+    (account2_id, 'Account 2', user2_id, 'account-2', active_status_id);
+
+  -- Add memberships
+  INSERT INTO accounts.account_members (user_id, account_id, role_id, membership_status) VALUES
+    (user1_id, account1_id, owner_role_id, active_status_id),
+    (user2_id, account2_id, owner_role_id, active_status_id);
+
+  -- Test isolation: user1 should not see account2
+  PERFORM set_config('request.jwt.claims',
+    format('{"sub": "%s", "app_metadata": {"accounts": {"%s": {"role": "owner", "status": "active"}}}}',
+           user1_id, account1_id), true);
+  PERFORM set_config('role', 'authenticated', true);
+
+  -- This should return only account1
+  IF (SELECT count(*) FROM accounts.accounts WHERE id = account2_id) > 0 THEN
+    RAISE EXCEPTION 'DATA LEAK: User1 can see Account2!';
+  END IF;
+
+  RAISE NOTICE 'Data isolation test passed';
+
+  -- Cleanup
+  DELETE FROM accounts.account_members WHERE user_id IN (user1_id, user2_id);
+  DELETE FROM accounts.accounts WHERE id IN (account1_id, account2_id);
+  DELETE FROM auth.users WHERE id IN (user1_id, user2_id);
+END $$;
+```
+
+### Permission Testing
+
+```javascript
+// Jest test example for multi-tenant permissions
+describe("Multi-Tenant Permissions", () => {
+  let testUser, testAccount, otherAccount;
+
+  beforeEach(async () => {
+    testUser = await createTestUser();
+    testAccount = await createTestAccount(testUser.id);
+    otherAccount = await createTestAccount(); // Different owner
+  });
+
+  test("user cannot access other account data", async () => {
+    const supabase = createClient(testUser.id, {
+      accounts: { [testAccount.id]: { role: "owner", status: "active" } },
+    });
+
+    // Should not be able to access other account
+    const { data, error } = await supabase
+      .from("accounts")
+      .select("*")
+      .eq("id", otherAccount.id);
+
+    expect(data).toHaveLength(0);
+  });
+
+  test("account member permissions work correctly", async () => {
+    // Add user as member to other account
+    await addAccountMember(otherAccount.id, testUser.id, "member");
+
+    const supabase = createClient(testUser.id, {
+      accounts: {
+        [testAccount.id]: { role: "owner", status: "active" },
+        [otherAccount.id]: { role: "member", status: "active" },
+      },
+    });
+
+    // Should be able to read but not update
+    const { data: readData } = await supabase
+      .from("accounts")
+      .select("*")
+      .eq("id", otherAccount.id);
+
+    expect(readData).toHaveLength(1);
+
+    // Should not be able to update
+    const { error } = await supabase
+      .from("accounts")
+      .update({ name: "Hacked!" })
+      .eq("id", otherAccount.id);
+
+    expect(error).toBeTruthy();
+  });
+
+  test("account roles have correct permissions", async () => {
+    const accountId = testAccount.id;
+
+    // Test owner permissions
+    expect(await testAuthorize("owner", "account:delete", accountId)).toBe(
+      true
+    );
+    expect(await testAuthorize("owner", "account:admin", accountId)).toBe(true);
+    expect(await testAuthorize("owner", "account:write", accountId)).toBe(true);
+    expect(await testAuthorize("owner", "account:read", accountId)).toBe(true);
+
+    // Test admin permissions
+    expect(await testAuthorize("admin", "account:delete", accountId)).toBe(
+      false
+    );
+    expect(await testAuthorize("admin", "account:admin", accountId)).toBe(true);
+    expect(await testAuthorize("admin", "account:write", accountId)).toBe(true);
+    expect(await testAuthorize("admin", "account:read", accountId)).toBe(true);
+
+    // Test member permissions
+    expect(await testAuthorize("member", "account:admin", accountId)).toBe(
+      false
+    );
+    expect(await testAuthorize("member", "account:write", accountId)).toBe(
+      true
+    );
+    expect(await testAuthorize("member", "account:read", accountId)).toBe(true);
+
+    // Test guest permissions
+    expect(await testAuthorize("guest", "account:write", accountId)).toBe(
+      false
+    );
+    expect(await testAuthorize("guest", "account:read", accountId)).toBe(true);
+  });
+
+  test("account app roles work correctly", async () => {
+    const adminAccountId = await createTestAccount(testUser.id, "admin");
+    const clientAccountId = await createTestAccount(testUser.id, "client");
+    const partnerAccountId = await createTestAccount(testUser.id, "partner");
+
+    // Test admin account permissions
+    expect(await testAuthorizeApp("app:admin", adminAccountId, "admin")).toBe(
+      true
+    );
+    expect(
+      await testAuthorizeApp("app:manage_users", adminAccountId, "admin")
+    ).toBe(true);
+    expect(
+      await testAuthorizeApp("app:system_config", adminAccountId, "admin")
+    ).toBe(true);
+
+    // Test client account permissions
+    expect(
+      await testAuthorizeApp("app:standard_access", clientAccountId, "client")
+    ).toBe(true);
+    expect(await testAuthorizeApp("app:admin", clientAccountId, "client")).toBe(
+      false
+    );
+
+    // Test partner account permissions
+    expect(
+      await testAuthorizeApp("app:partner_access", partnerAccountId, "partner")
+    ).toBe(true);
+    expect(
+      await testAuthorizeApp("app:api_access", partnerAccountId, "partner")
+    ).toBe(true);
+    expect(
+      await testAuthorizeApp("app:admin", partnerAccountId, "partner")
+    ).toBe(false);
+  });
+});
+
+async function testAuthorize(role, permission, accountId) {
+  const supabase = createClient(testUser.id, {
+    accounts: { [accountId]: { role, status: "active", app_role: "client" } },
+  });
+
+  const { data } = await supabase.rpc("authorize_account", {
+    requested_permission: permission,
+    account_id: accountId,
+  });
+
+  return data;
+}
+
+async function testAuthorizeApp(permission, accountId, appRole) {
+  const permissions = {
+    admin: ["app:admin", "app:manage_users", "app:system_config"],
+    client: ["app:standard_access"],
+    partner: ["app:partner_access", "app:api_access"],
+  };
+
+  const supabase = createClient(testUser.id, {
+    accounts: {
+      [accountId]: {
+        role: "owner",
+        status: "active",
+        app_role: appRole,
+        app_permissions: permissions[appRole] || [],
+      },
+    },
+  });
+
+  const { data } = await supabase.rpc("authorize_app", {
+    requested_permission: permission,
+  });
+
+  return data;
+}
+```
+
+### Invitation Flow Testing
+
+```javascript
+describe("Invitation System", () => {
+  test("should prevent duplicate invitations", async () => {
+    const account = await createTestAccount();
+
+    // First invitation should succeed
+    await inviteUser("john@example.com", account.id, "member");
+
+    // Second invitation should fail
+    await expect(
+      inviteUser("john@example.com", account.id, "member")
+    ).rejects.toThrow("User is already a member");
+  });
+
+  test("should handle expired invitations", async () => {
+    const expiredToken = await createExpiredInvitation();
+
+    await expect(acceptInvitation(expiredToken)).rejects.toThrow(
+      "Invitation expired"
+    );
+  });
+
+  test("should activate membership on email confirmation", async () => {
+    const invitation = await inviteUser(
+      "jane@example.com",
+      account.id,
+      "member"
+    );
+
+    // Simulate user signup and email confirmation
+    const user = await signUpUser("jane@example.com");
+    await confirmUserEmail(user.id);
+
+    // Check that membership is now active
+    const membership = await getAccountMembership(user.id, account.id);
+    expect(membership.status).toBe("active");
+  });
+});
+```
+
+## 5. Common Pitfalls & Prevention
+
+### 1. Always Include Tenant Context
+
+**❌ Dangerous - No tenant isolation:**
+
+```sql
+SELECT * FROM projects WHERE id = $1;
+```
+
+**✅ Safe - Always include account context:**
+
+```sql
+SELECT * FROM projects
+WHERE id = $1
+AND account_id = $2;
+```
+
+### 2. Validate RLS Policies Thoroughly
+
+Test your RLS policies with different user contexts:
+
+```sql
+-- Test as account owner
+SET request.jwt.claims = '{"sub": "user-1", "app_metadata": {"accounts": {"account-1": {"role": "owner", "status": "active"}}}}';
+SELECT * FROM accounts.accounts; -- Should see account-1
+
+-- Test as account member
+SET request.jwt.claims = '{"sub": "user-2", "app_metadata": {"accounts": {"account-1": {"role": "member", "status": "active"}}}}';
+UPDATE accounts.accounts SET name = 'Hacked' WHERE id = 'account-1'; -- Should fail
+
+-- Test as non-member
+SET request.jwt.claims = '{"sub": "user-3", "app_metadata": {"accounts": {}}}';
+SELECT * FROM accounts.accounts; -- Should see nothing
+```
+
+### 3. Secure Client-Side Code
+
+Never rely only on client-side checks:
+
+```typescript
+// ❌ Bad - Only client-side check
+if (user.role === 'admin') {
+  return <AdminPanel />;
+}
+
+// ✅ Good - Server-side validation with client-side UX
+const { data: hasAdminAccess } = await supabase.rpc('authorize_account', {
+  requested_permission: 'account:admin',
+  account_id: currentAccount.id
+});
+
+if (hasAdminAccess) {
+  return <AdminPanel />;
+}
+```
+
+### 4. Handle Permission Errors Gracefully
+
+```typescript
+try {
+  const { data, error } = await supabase.from("accounts").select("*");
+
+  if (error) {
+    // RLS policy blocked access
+    if (error.code === "PGRST116") {
+      throw new Error("Access denied to this resource");
+    }
+    throw error;
+  }
+
+  return data;
+} catch (error) {
+  // Log security violations for monitoring
+  console.error("Access violation:", error);
+  return [];
+}
+```
+
+### 5. Prevent Account Switching Attacks
+
+Always validate account context on the server:
+
+```typescript
+// ❌ Bad - Trust client-provided account ID
+const accountId = request.body.accountId;
+const data = await getProjectsForAccount(accountId);
+
+// ✅ Good - Validate user has access to account
+const accountId = request.body.accountId;
+const hasAccess = await supabase.rpc("is_account_member", {
+  account_id: accountId,
+});
+
+if (!hasAccess) {
+  throw new Error("Access denied");
+}
+
+const data = await getProjectsForAccount(accountId);
+```
+
+## 6. Debugging Multi-Tenant Issues
+
+### Enable Detailed Logging
+
+```sql
+-- Enable RLS policy logging
+SET log_min_messages = 'debug';
+SET log_statement = 'all';
+
+-- Monitor auth function calls
+CREATE OR REPLACE FUNCTION public.debug_authorize_account(
+  requested_permission text,
+  account_id uuid
+)
+RETURNS boolean AS $$
+DECLARE
+  result boolean;
+BEGIN
+  result := authorize_account(requested_permission, account_id);
+  RAISE LOG 'authorize_account(%, %) = %', requested_permission, account_id, result;
+  RETURN result;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+### Useful Debugging Queries
+
+```sql
+-- Check user's current context
+SELECT
+  auth.uid() as user_id,
+  auth.jwt()->'app_metadata'->'accounts' as accounts;
+
+-- Check user's account memberships
+SELECT
+  a.name as account_name,
+  a.slug as account_slug,
+  ar.slug as role,
+  ams.slug as status
+FROM accounts.account_members am
+JOIN accounts.accounts a ON am.account_id = a.id
+JOIN accounts.account_roles ar ON am.role_id = ar.id
+JOIN accounts.account_statuses ams ON am.membership_status = ams.id
+WHERE am.user_id = auth.uid();
+
+-- Test specific permissions
+SELECT
+  'account:read' as permission,
+  authorize_account('account:read', 'your-account-id') as has_permission
+UNION ALL
+SELECT
+  'account:admin' as permission,
+  authorize_account('account:admin', 'your-account-id') as has_permission;
+```
+
+### Common JWT Issues
+
+```typescript
+// Debug JWT claims in your application
+const {
+  data: { user },
+} = await supabase.auth.getUser();
+console.log("JWT Claims:", user?.app_metadata);
+
+// Check if account context is present
+const accounts = user?.app_metadata?.accounts || {};
+console.log("User accounts:", accounts);
+
+// Validate specific account access
+const accountId = "your-account-id";
+const accountInfo = accounts[accountId];
+if (!accountInfo || accountInfo.status !== "active") {
+  console.error("No access to account:", accountId);
+}
+```
+
+## 5. Domain Verification
+
+### Domain Management
+
+Organizations can verify domain ownership for enhanced security:
+
+```sql
+CREATE TABLE public.domains(
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id uuid REFERENCES accounts.accounts(id) ON DELETE CASCADE,
+  name text NOT NULL CHECK (length(name) > 0 AND length(name) < 64),
+  verification_code text,
+  is_verified boolean DEFAULT FALSE,
+  status uuid REFERENCES public.domain_statuses(id),
+  updated_at timestamp with time zone DEFAULT now(),
+  created_at timestamp with time zone DEFAULT now(),
+  UNIQUE (account_id, name)
+);
+
+CREATE TABLE public.domain_statuses(
+  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name text NOT NULL,
+  slug text NOT NULL UNIQUE,
+  description text
+);
+
+-- Insert domain statuses
+INSERT INTO public.domain_statuses (name, slug, description) VALUES
+  ('Pending', 'pending', 'Domain verification is pending'),
+  ('Verified', 'verified', 'Domain has been verified'),
+  ('Failed', 'failed', 'Domain verification failed'),
+  ('Expired', 'expired', 'Domain verification has expired');
+```
+
+### Verification Process
+
+```sql
+-- Generate verification code on insert
+CREATE OR REPLACE FUNCTION private.set_verification_code()
+RETURNS TRIGGER AS $$
+DECLARE
+  random_code text;
+BEGIN
+  random_code := private.generate_random_code(5);
+  NEW.verification_code := encode(extensions.digest(random_code, 'sha256'), 'hex');
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Helper function to generate random codes
+CREATE OR REPLACE FUNCTION private.generate_random_code(length int)
+RETURNS text AS $$
+BEGIN
+  RETURN upper(substr(gen_random_uuid()::text, 1, length));
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Verify submitted code
+CREATE OR REPLACE FUNCTION private.verify_code(domain_id uuid, code text)
+RETURNS boolean AS $$
+DECLARE
+  hashed_code text;
+  stored_code text;
+BEGIN
+  hashed_code := encode(extensions.digest(code, 'sha256'), 'hex');
+
+  SELECT verification_code INTO stored_code
+  FROM public.domains
+  WHERE id = domain_id;
+
+  RETURN hashed_code = stored_code;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Create trigger for verification code generation
+CREATE TRIGGER on_domain_insert
+  BEFORE INSERT ON public.domains
+  FOR EACH ROW EXECUTE FUNCTION private.set_verification_code();
+```
+
+## Security Checklist
+
+Before deploying your multi-tenant system:
+
+**✅ Authentication & Authorization:**
+
+- [ ] Custom access token hook is configured and working
+- [ ] Permission functions return correct results for all user types
+- [ ] RLS policies are enabled on all sensitive tables
+- [ ] Account-level permissions are properly enforced
+
+**✅ Data Isolation:**
+
+- [ ] Cross-tenant queries are blocked by RLS policies
+- [ ] Users cannot access accounts they don't belong to
+- [ ] Invitation tokens are properly secured and validated
+- [ ] Domain verification prevents unauthorized access
+
+**✅ Testing:**
+
+- [ ] Automated tests cover all permission combinations
+- [ ] Data isolation is verified with test users
+- [ ] Invitation workflow is thoroughly tested
+- [ ] Edge cases (expired tokens, deleted accounts) are handled
+
+**✅ Monitoring:**
+
+- [ ] Access violations are logged and monitored
+- [ ] Permission errors are handled gracefully in the UI
+- [ ] Database performance is optimized for tenant queries
+
+## Next: Building the Application Layer
+
+In **Part 4**, we'll implement the Next.js application layer:
+
+- **Auth Context**: React hooks for managing multi-tenant state
+- **Permission Guards**: Client-side components that respect account and app-level roles
+- **Account Switcher**: Seamless organization switching with app role awareness
+- **Subdomain Routing**: Automatic account context from URLs
+- **Admin Interfaces**: Special UI for admin accounts with elevated privileges
+
+Our authorization system is now complete and secure. It supports both account-level membership roles (owner, admin, member, guest) and extensible account app roles (admin, client, partner) for different business purposes. Users can only access data they're supposed to, and the system prevents the most common multi-tenant security vulnerabilities. The foundation is ready for building the user interface!

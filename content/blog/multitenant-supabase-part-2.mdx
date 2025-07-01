@@ -18,7 +18,7 @@ import Link from "next/link";
         <Link href="/blog/multitenant-supabase-part-2">Part 2: Database schema setup</Link>
       </li>
       <li>
-        Part 3: Auth claims and permissions
+        <Link href="/blog/multitenant-supabase-part-3">Part 3: Auth claims and permissions</Link>
       </li>
       <li>
         Part 4: Enhanced subdomain routing and multi-tenant middleware
@@ -45,31 +45,15 @@ import Link from "next/link";
 
 In the [previous part](/blog/multitenant-supabase-part-1), we set up our multi-tenant Supabase project with cross-domain authentication. Now we'll create the database schema that powers our multi-tenant organization system.
 
-Building a robust multi-tenant data model is one of the most critical decisions in SaaS architecture. As the [FlightControl team wisely notes](https://www.flightcontrol.dev/blog/ultimate-guide-to-multi-tenant-saas-data-modeling), you should build "teams" functionality from day one - it's much harder to retrofit later.
+## A users view
 
-Our schema implements what FlightControl calls the **"Linear model"** - a hybrid approach that allows users to have separate accounts for different organizations while also enabling access to multiple organizations from a single user account. This provides maximum flexibility for both enterprise customers and individual users.
+- **One user account** with consistent identity across all workspaces (1 email, multiple accounts)
+- E.g. **Three organization memberships** with different roles:
+  - Owner of `username` (personal workspace)
+  - Member of `acme-corp-team` (company workspace)
+  - Admin of `design-collective` (company workspace)
 
-## Real-World Example
-
-Before diving into the technical details, let's consider a practical scenario that our schema handles:
-
-**Sarah's Journey:**
-
-1. **Personal Start**: Sarah signs up and gets her personal workspace `sarah-personal`
-2. **Client Work**: A company invites her to their team workspace `acme-corp-team`
-3. **Collaboration**: She joins another team workspace `design-collective`
-4. **Business Growth**: Sarah creates her own team workspace `sarah-agency`
-
-In our system, Sarah has:
-
-- **One user account** with consistent identity across all workspaces
-- **Four organization memberships** with different roles:
-  - Owner of `sarah-personal` (personal workspace)
-  - Member of `acme-corp-team` (client work)
-  - Admin of `design-collective` (collaboration)
-  - Owner of `sarah-agency` (her business)
-
-She can seamlessly switch between these contexts without logging out, and each organization has complete data isolation. This is the power of the Linear model in action.
+User can seamlessly switch between these contexts without logging out, and each organization has complete data isolation.
 
 ## Setting Up Your Supabase Schema
 
@@ -79,7 +63,7 @@ Before we start, ensure you have:
 
 - A Supabase project created
 - Database access (either via dashboard or local development)
-- Understanding of Supabase's built-in `auth.users` table
+- Understanding of (Supabase built-in `auth.users` table)[https://supabase.com/docs/guides/auth/users]
 
 ### Migration Strategy
 
@@ -90,18 +74,17 @@ We'll run these migrations in order, building on Supabase's existing auth system
 -- 2. User profiles
 -- 3. Organizations and membership system
 -- 4. Invitation system with JWT integration
--- 5. Domain verification
--- 6. Auth hooks and claims
+-- 5. Domain verification (optional)
+-- 6. Auth hooks and claims (part 3)
 ```
 
 ### Step 1: Initial Setup
 
-Create the foundation by extending Supabase's auth system:
+Create the foundation by extending Supabase's auth system with an `accounts` schema:
 
 ```sql
 -- Create additional schemas
 CREATE SCHEMA IF NOT EXISTS accounts;
-CREATE SCHEMA IF NOT EXISTS private;
 
 -- Set up permissions for Supabase roles
 GRANT USAGE ON SCHEMA accounts TO authenticated, service_role, supabase_auth_admin;
@@ -139,7 +122,7 @@ ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
 
 -- Basic RLS policy
 CREATE POLICY "Users can view own profile" ON public.user_profiles
-  FOR SELECT USING (auth.uid() = id);
+  FOR SELECT USING ((select auth.uid()) = id);
 ```
 
 ### Step 3: Create the Multi-Tenant Foundation
@@ -187,123 +170,19 @@ INSERT INTO accounts.account_app_roles (name, slug, description, permissions) VA
   ('Partner', 'partner', 'Business partner accounts', '["app:partner_access", "app:api_access"]');
 ```
 
-### Step 4: Set Up Auth Hooks
+This allows for:
 
-This is where Supabase really shines - we can hook into the auth system:
+- **Personal accounts** - Individual user workspaces (automatically created)
+- **Team accounts** - Collaborative workspaces (created by users)
 
-```sql
--- Function to handle new user registration
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS trigger AS $$
-DECLARE
-  personal_account_id uuid;
-  username text;
-  unique_username text;
-BEGIN
-  -- Extract username from metadata or email
-  username := COALESCE(NEW.raw_user_meta_data->>'username', split_part(NEW.email, '@', 1));
+**Real-world examples:**
 
-  -- Generate unique username
-  unique_username := username;
-  WHILE EXISTS (SELECT 1 FROM public.user_profiles WHERE username = unique_username) LOOP
-    unique_username := username || '_' || substr(gen_random_uuid()::text, 1, 4);
-  END LOOP;
+- **Admin accounts** - Internal staff accounts with system-wide privileges
+- **Client accounts** - Customer accounts with standard access (default for new users)
+- **Partner accounts** - Business partner accounts with API access and special permissions
+- **Vendor accounts** - Supplier accounts with limited but specific access patterns
 
-  -- Create user profile
-  INSERT INTO public.user_profiles (id, email, username, email_status)
-  VALUES (
-    NEW.id,
-    NEW.email,
-    unique_username,
-    CASE WHEN NEW.email_confirmed_at IS NULL THEN 'pending' ELSE 'confirmed' END
-  );
-
-  -- Create personal account with default client app role
-  INSERT INTO accounts.accounts (name, owner_id, type, slug, status, app_role)
-  SELECT
-    unique_username,
-    NEW.id,
-    act.id,
-    unique_username,
-    acs.id,
-    aar.id
-  FROM accounts.account_types act,
-       accounts.account_statuses acs,
-       accounts.account_app_roles aar
-  WHERE act.slug = 'personal'
-    AND acs.slug = 'active'
-    AND aar.slug = 'client'
-  RETURNING id INTO personal_account_id;
-
-  -- Add owner membership
-  INSERT INTO accounts.account_members (account_id, user_id, role_id, membership_status)
-  SELECT personal_account_id, NEW.id, ar.id, acs.id
-  FROM accounts.account_roles ar, accounts.account_statuses acs
-  WHERE ar.slug = 'owner' AND acs.slug = 'active';
-
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Create the trigger
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-```
-
-### Step 5: Configure Auth Claims Hook
-
-In your Supabase dashboard, go to **Authentication > Hooks** and set up the custom access token hook:
-
-```sql
-CREATE OR REPLACE FUNCTION public.custom_access_token_hook(event jsonb)
-RETURNS jsonb
-LANGUAGE plpgsql
-STABLE
-AS $$
-DECLARE
-  claims jsonb;
-  user_accounts jsonb;
-BEGIN
-  -- Get user's account memberships with account app roles
-  SELECT jsonb_object_agg(
-    am.account_id::text,
-    jsonb_build_object(
-      'role', ar.slug,
-      'account_name', a.name,
-      'account_slug', a.slug,
-      'status', ams.slug,
-      'app_role', aar.slug,
-      'app_permissions', aar.permissions
-    )
-  ) INTO user_accounts
-  FROM accounts.account_members am
-  JOIN accounts.accounts a ON am.account_id = a.id
-  JOIN accounts.account_roles ar ON am.role_id = ar.id
-  JOIN accounts.account_statuses ams ON am.membership_status = ams.id
-  JOIN accounts.account_app_roles aar ON a.app_role = aar.id
-  WHERE am.user_id = (event->>'user_id')::uuid
-  AND ams.slug = 'active';
-
-  claims := event->'claims';
-
-  -- Add custom claims
-  claims := jsonb_set(claims, '{app_metadata,accounts}', COALESCE(user_accounts, '{}'));
-
-  RETURN jsonb_set(event, '{claims}', claims);
-END;
-$$;
-```
-
-## Schema Overview
-
-Our multi-tenant system consists of several key components:
-
-1. **User Management** - Profiles and settings
-2. **Organization Management** - Personal and team accounts
-3. **Membership System** - User-organization relationships with roles
-4. **Invitation System** - Secure token-based invitations
-5. **Domain Verification** - Organization domain ownership
+This system is **completely extensible** - you can add new app roles like `enterprise`, `reseller`, `integration`, etc., each with their own permission sets and business logic.
 
 Let's explore each component in detail.
 
@@ -327,90 +206,6 @@ erDiagram
 ```
 
 This diagram shows the core relationships in our multi-tenant system. Notice how `account_members` is the central table that connects users to accounts with specific roles, and how accounts have both a type (personal/team) and an app-level role that determines their purpose in the broader application.
-
-## 1. User Management
-
-### Core User Tables
-
-```sql
--- User profiles extending Supabase auth.users
-CREATE TABLE public.user_profiles(
-  id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  username text NOT NULL UNIQUE,
-  full_name text,
-  first_name text,
-  last_name text,
-  email text NOT NULL UNIQUE,
-  email_status public.email_status DEFAULT 'pending',
-  -- Address fields
-  address text,
-  city text,
-  state text,
-  zip_code text,
-  country uuid REFERENCES public.countries(id),
-  -- Metadata
-  settings jsonb DEFAULT '{}',
-  newsletter boolean DEFAULT FALSE,
-  onboarding_completed boolean DEFAULT FALSE,
-  deleted_at timestamp with time zone,
-  updated_at timestamp with time zone DEFAULT now(),
-  created_at timestamp with time zone DEFAULT now()
-);
-```
-
-## 2. Organization Management
-
-### Account Types
-
-We support two simple account types:
-
-```sql
-CREATE TABLE accounts.account_types(
-  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name text NOT NULL,
-  slug text NOT NULL UNIQUE CHECK (slug IN ('personal', 'team')),
-  description text
-);
-
--- Insert essential data
-INSERT INTO accounts.account_types (name, slug, description) VALUES
-  ('Personal', 'personal', 'Individual workspace'),
-  ('Team', 'team', 'Collaborative workspace');
-```
-
-This allows for:
-
-- **Personal accounts** - Individual user workspaces (automatically created)
-- **Team accounts** - Collaborative workspaces (created by users)
-
-### Account App Roles (Extensible)
-
-Each account has an app-level role that determines its purpose in your application:
-
-```sql
-CREATE TABLE accounts.account_app_roles(
-  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name text NOT NULL,
-  slug text NOT NULL UNIQUE,
-  description text,
-  permissions jsonb DEFAULT '[]'
-);
-
--- Insert account app roles (easily extensible)
-INSERT INTO accounts.account_app_roles (name, slug, description, permissions) VALUES
-  ('Admin', 'admin', 'Internal admin accounts with elevated privileges', '["app:admin", "app:manage_users", "app:system_config"]'),
-  ('Client', 'client', 'Standard client accounts', '["app:standard_access"]'),
-  ('Partner', 'partner', 'Business partner accounts', '["app:partner_access", "app:api_access"]');
-```
-
-**Real-world examples:**
-
-- **Admin accounts** - Internal staff accounts with system-wide privileges
-- **Client accounts** - Customer accounts with standard access (default for new users)
-- **Partner accounts** - Business partner accounts with API access and special permissions
-- **Vendor accounts** - Supplier accounts with limited but specific access patterns
-
-This system is **completely extensible** - you can add new app roles like `enterprise`, `reseller`, `integration`, etc., each with their own permission sets and business logic.
 
 ### Account Statuses
 
@@ -441,10 +236,7 @@ CREATE TABLE accounts.accounts(
   owner_id uuid REFERENCES auth.users(id),
   name text NOT NULL CHECK (length(name) >= 2 AND length(name) <= 128),
   slug text UNIQUE NOT NULL CHECK (length(slug) >= 3 AND length(slug) <= 128),
-  web_url text,
-  avatar_url text,
   status uuid REFERENCES accounts.account_statuses(id),
-  avatar_color text DEFAULT '#EA9D20',
   billing_email text,
   billing_customer_id text,
   type uuid REFERENCES accounts.account_types(id),
@@ -454,30 +246,6 @@ CREATE TABLE accounts.accounts(
   updated_at timestamp with time zone DEFAULT now(),
   created_at timestamp with time zone DEFAULT now()
 );
-```
-
-## 3. Membership System
-
-### Account Roles
-
-Within each account, users can have different roles:
-
-```sql
-CREATE TABLE accounts.account_roles(
-  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name text NOT NULL,
-  slug text NOT NULL UNIQUE CHECK (slug IN (
-    'owner', 'admin', 'member', 'guest'
-  )),
-  description text
-);
-
--- Insert essential roles
-INSERT INTO accounts.account_roles (name, slug, description) VALUES
-  ('Owner', 'owner', 'Full access to account including deletion'),
-  ('Admin', 'admin', 'Manage members and account settings'),
-  ('Member', 'member', 'Standard member access'),
-  ('Guest', 'guest', 'Limited read-only access');
 ```
 
 ### Account Members
@@ -511,7 +279,7 @@ CREATE TABLE accounts.account_members(
 );
 ```
 
-## 4. Invitation System
+### Invitation System
 
 ### Secure Token Generation
 
@@ -608,86 +376,6 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE TRIGGER on_auth_user_confirmed
   AFTER UPDATE ON auth.users
   FOR EACH ROW EXECUTE FUNCTION accounts.handle_user_confirmed_email();
-```
-
-## 5. Domain Verification
-
-### Domain Management
-
-Organizations can verify domain ownership for enhanced security:
-
-```sql
-CREATE TABLE public.domains(
-  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
-  account_id uuid REFERENCES accounts.accounts(id) ON DELETE CASCADE,
-  name text NOT NULL CHECK (length(name) > 0 AND length(name) < 64),
-  verification_code text,
-  is_verified boolean DEFAULT FALSE,
-  status uuid REFERENCES public.domain_statuses(id),
-  updated_at timestamp with time zone DEFAULT now(),
-  created_at timestamp with time zone DEFAULT now(),
-  UNIQUE (account_id, name)
-);
-
-CREATE TABLE public.domain_statuses(
-  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name text NOT NULL,
-  slug text NOT NULL UNIQUE,
-  description text
-);
-
--- Insert domain statuses
-INSERT INTO public.domain_statuses (name, slug, description) VALUES
-  ('Pending', 'pending', 'Domain verification is pending'),
-  ('Verified', 'verified', 'Domain has been verified'),
-  ('Failed', 'failed', 'Domain verification failed'),
-  ('Expired', 'expired', 'Domain verification has expired');
-```
-
-### Verification Process
-
-```sql
--- Generate verification code on insert
-CREATE OR REPLACE FUNCTION private.set_verification_code()
-RETURNS TRIGGER AS $$
-DECLARE
-  random_code text;
-BEGIN
-  random_code := private.generate_random_code(5);
-  NEW.verification_code := encode(extensions.digest(random_code, 'sha256'), 'hex');
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Helper function to generate random codes
-CREATE OR REPLACE FUNCTION private.generate_random_code(length int)
-RETURNS text AS $$
-BEGIN
-  RETURN upper(substr(gen_random_uuid()::text, 1, length));
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Verify submitted code
-CREATE OR REPLACE FUNCTION private.verify_code(domain_id uuid, code text)
-RETURNS boolean AS $$
-DECLARE
-  hashed_code text;
-  stored_code text;
-BEGIN
-  hashed_code := encode(extensions.digest(code, 'sha256'), 'hex');
-
-  SELECT verification_code INTO stored_code
-  FROM public.domains
-  WHERE id = domain_id;
-
-  RETURN hashed_code = stored_code;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Create trigger for verification code generation
-CREATE TRIGGER on_domain_insert
-  BEFORE INSERT ON public.domains
-  FOR EACH ROW EXECUTE FUNCTION private.set_verification_code();
 ```
 
 ## 6. Automatic User Onboarding
@@ -814,7 +502,6 @@ Our multi-tenant database schema now includes:
 ✅ **Account App Roles**: Extensible system for admin, client, partner accounts
 ✅ **Membership Management**: Role-based access within each account
 ✅ **Invitation System**: JWT-based invitations with automatic onboarding
-✅ **Domain Verification**: Organization ownership validation for enhanced security
 ✅ **Performance Optimization**: Proper indexing and cleanup procedures
 
 ### Supabase Integration Highlights
@@ -846,6 +533,7 @@ In [**Part 3**](/blog/multitenant-supabase-part-3), we'll implement the authoriz
 - **Auth Hooks**: Custom JWT claims with account context
 - **Permission System**: Organization-level authorization checks
 - **Row Level Security**: Database-level access control
+- **Domain verification**: Organization domain ownership
 - **Testing Strategies**: Ensuring tenant isolation and security
 - **Common Pitfalls**: Avoiding multi-tenant data leakage
 
