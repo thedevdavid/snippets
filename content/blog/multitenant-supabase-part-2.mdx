@@ -50,40 +50,25 @@ In the [previous part](/blog/multitenant-supabase-part-1), we set up our multi-t
 - **One user account** with consistent identity across all workspaces (1 email, multiple accounts)
 - E.g. **Three organization memberships** with different roles:
   - Owner of `username` (personal workspace)
-  - Member of `acme-corp-team` (company workspace)
-  - Admin of `design-collective` (company workspace)
+  - Member of `acme-corp` (company workspace)
+  - Admin of `acme-collective` (company workspace)
 
 User can seamlessly switch between these contexts without logging out, and each organization has complete data isolation.
 
-## Setting Up Your Supabase Schema
+## 1. Setting Up Your Supabase Schema
 
 ### Prerequisites
 
-Before we start, ensure you have:
+Of course you'll need:
 
-- A Supabase project created
-- Database access (either via dashboard or local development)
+- A Supabase project created (either cloud or local)
 - Understanding of (Supabase built-in `auth.users` table)[https://supabase.com/docs/guides/auth/users]
-
-### Migration Strategy
-
-We'll run these migrations in order, building on Supabase's existing auth system:
-
-```sql
--- 1. Initial setup (extensions, schemas, permissions)
--- 2. User profiles
--- 3. Organizations and membership system
--- 4. Invitation system with JWT integration
--- 5. Domain verification (optional)
--- 6. Auth hooks and claims (part 3)
-```
 
 ### Step 1: Initial Setup
 
-Create the foundation by extending Supabase's auth system with an `accounts` schema:
+We'll start by creating an `accounts` schema:
 
 ```sql
--- Create additional schemas
 CREATE SCHEMA IF NOT EXISTS accounts;
 
 -- Set up permissions for Supabase roles
@@ -98,7 +83,7 @@ SELECT vault.create_secret(
 );
 ```
 
-### Step 2: Extend Supabase Auth with Profiles
+### Step 2: Add user profiles to `public` schema, extending `auth.users`
 
 ```sql
 -- Email status enum
@@ -123,9 +108,13 @@ ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
 -- Basic RLS policy
 CREATE POLICY "Users can view own profile" ON public.user_profiles
   FOR SELECT USING ((select auth.uid()) = id);
+
+-- User lookup optimizations
+CREATE INDEX CONCURRENTLY idx_user_profiles_email ON public.user_profiles(email);
+CREATE INDEX CONCURRENTLY idx_user_profiles_username ON public.user_profiles(username);
 ```
 
-### Step 3: Create the Multi-Tenant Foundation
+### Step 3: Accounts roles and types
 
 ```sql
 -- Account types and roles
@@ -182,32 +171,11 @@ This allows for:
 - **Partner accounts** - Business partner accounts with API access and special permissions
 - **Vendor accounts** - Supplier accounts with limited but specific access patterns
 
-This system is **completely extensible** - you can add new app roles like `enterprise`, `reseller`, `integration`, etc., each with their own permission sets and business logic.
+This system is **completely extensible** - you can add new app roles like, each with their own permission sets and business logic.
 
-Let's explore each component in detail.
+### Step 4: Main accounts logic
 
-### Database Schema Diagram
-
-Here's how all the tables relate to each other:
-
-```mermaid
-erDiagram
-    users ||--o{ user_profiles : has
-    users ||--o{ account_members : belongs_to
-
-    accounts ||--o{ account_members : contains
-    accounts ||--|| account_types : has_type
-    accounts ||--|| account_statuses : has_status
-    accounts ||--|| account_app_roles : has_app_role
-    accounts ||--o{ domains : owns
-
-    account_members ||--|| account_roles : has_role
-    account_members ||--|| account_statuses : has_status
-```
-
-This diagram shows the core relationships in our multi-tenant system. Notice how `account_members` is the central table that connects users to accounts with specific roles, and how accounts have both a type (personal/team) and an app-level role that determines their purpose in the broader application.
-
-### Account Statuses
+#### Account statuses
 
 ```sql
 CREATE TABLE accounts.account_statuses(
@@ -219,7 +187,7 @@ CREATE TABLE accounts.account_statuses(
   description text
 );
 
--- Insert essential statuses
+-- Insert default statuses
 INSERT INTO accounts.account_statuses (name, slug, description) VALUES
   ('Active', 'active', 'Account is active and functional'),
   ('Suspended', 'suspended', 'Account is temporarily suspended'),
@@ -228,7 +196,7 @@ INSERT INTO accounts.account_statuses (name, slug, description) VALUES
   ('Inactive', 'inactive', 'Account is inactive');
 ```
 
-### Main Accounts Table
+#### Main Accounts Table
 
 ```sql
 CREATE TABLE accounts.accounts(
@@ -248,9 +216,9 @@ CREATE TABLE accounts.accounts(
 );
 ```
 
-### Account Members
+#### Account Members
 
-The core membership table that connects users to accounts:
+Note: Invitations are handled in memberships table too, so it's possible to tag invited users before they accept the invitation.
 
 ```sql
 CREATE TABLE accounts.account_members(
@@ -279,11 +247,11 @@ CREATE TABLE accounts.account_members(
 );
 ```
 
-### Invitation System
+### Step 5: Invitation System
 
-### Secure Token Generation
+#### Secure Token Generation
 
-We use JWT tokens for secure invitations:
+We use signed tokens for secure invitations:
 
 ```sql
 CREATE OR REPLACE FUNCTION accounts.set_invite_token(
@@ -339,10 +307,10 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 ```
 
-### Invitation Workflow
+#### Invitation Workflow
 
 1. **Create Invitation**: Account owner/admin creates invitation
-2. **Generate Token**: Secure JWT token generated with expiration
+2. **Generate Token**: Signed token generated with expiration
 3. **Send Email**: Token sent to invitee via email
 4. **Accept Invitation**: User signs up/logs in with token
 5. **Automatic Membership**: Trigger updates membership when user confirms email
@@ -376,9 +344,18 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE TRIGGER on_auth_user_confirmed
   AFTER UPDATE ON auth.users
   FOR EACH ROW EXECUTE FUNCTION accounts.handle_user_confirmed_email();
+
+CREATE INDEX CONCURRENTLY idx_account_members_user_account ON accounts.account_members(user_id, account_id);
+CREATE INDEX CONCURRENTLY idx_account_members_account_role ON accounts.account_members(account_id, role_id);
+CREATE INDEX CONCURRENTLY idx_accounts_owner_status ON accounts.accounts(owner_id, status);
+CREATE INDEX CONCURRENTLY idx_account_members_invite_token
+ON accounts.account_members(invite_token) WHERE invite_token IS NOT NULL;
+CREATE INDEX CONCURRENTLY idx_account_members_invite_expires
+ON accounts.account_members(invite_expires_at) WHERE invite_expires_at IS NOT NULL;
+
 ```
 
-## 6. Automatic User Onboarding
+## 3. Automatic User Onboarding
 
 ### New User Trigger
 
@@ -438,71 +415,17 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW EXECUTE FUNCTION accounts.handle_new_user();
 ```
 
-## 7. Performance Optimization
-
-### Essential Database Indexes
-
-Add these indexes for optimal multi-tenant query performance:
-
-```sql
--- User lookup optimizations
-CREATE INDEX CONCURRENTLY idx_user_profiles_email ON public.user_profiles(email);
-CREATE INDEX CONCURRENTLY idx_user_profiles_username ON public.user_profiles(username);
-
--- Multi-tenant query optimizations
-CREATE INDEX CONCURRENTLY idx_account_members_user_account ON accounts.account_members(user_id, account_id);
-CREATE INDEX CONCURRENTLY idx_account_members_account_role ON accounts.account_members(account_id, role_id);
-CREATE INDEX CONCURRENTLY idx_accounts_owner_status ON accounts.accounts(owner_id, status);
-
--- Invitation system optimizations
-CREATE INDEX CONCURRENTLY idx_account_members_invite_token
-ON accounts.account_members(invite_token) WHERE invite_token IS NOT NULL;
-CREATE INDEX CONCURRENTLY idx_account_members_invite_expires
-ON accounts.account_members(invite_expires_at) WHERE invite_expires_at IS NOT NULL;
-
--- Domain verification optimization
-CREATE INDEX CONCURRENTLY idx_domains_account_name ON public.domains(account_id, name);
-```
-
-### Data Cleanup Functions
-
-Implement regular maintenance procedures:
-
-```sql
--- Clean up expired invitations
-CREATE OR REPLACE FUNCTION accounts.cleanup_expired_invitations()
-RETURNS void AS $$
-BEGIN
-  DELETE FROM accounts.account_members
-  WHERE user_id IS NULL
-  AND invite_expires_at < NOW() - INTERVAL '7 days';
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Archive soft-deleted accounts
-CREATE OR REPLACE FUNCTION accounts.archive_deleted_accounts()
-RETURNS void AS $$
-BEGIN
-  UPDATE accounts.accounts
-  SET deleted_at = NOW()
-  WHERE status = (SELECT id FROM accounts.account_statuses WHERE slug = 'deleted')
-  AND deleted_at IS NULL;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-```
-
-## Database Schema Complete
+## 4. Database Schema Complete
 
 ### What We've Built
 
 Our multi-tenant database schema now includes:
 
-✅ **User Management**: Clean profiles extending Supabase auth
-✅ **Organization System**: Simple personal and team account types
-✅ **Account App Roles**: Extensible system for admin, client, partner accounts
-✅ **Membership Management**: Role-based access within each account
-✅ **Invitation System**: JWT-based invitations with automatic onboarding
-✅ **Performance Optimization**: Proper indexing and cleanup procedures
+- **User Management**: Clean profiles extending Supabase auth
+- **Organization System**: Simple personal and team account types
+- **Account App Roles**: Extensible system for admin, client, partner accounts
+- **Membership Management**: Role-based access within each account
+- **Invitation System**: Signed token-based invitations with automatic onboarding
 
 ### Supabase Integration Highlights
 
@@ -515,16 +438,13 @@ This schema leverages Supabase's strengths:
 
 ### Implementation Checklist
 
-**✅ Run these migrations in order:**
+**Run these migrations in order:**
 
 1. **Initial setup**: Schemas, permissions, and Vault secrets
 2. **User system**: Profiles and settings
 3. **Account system**: Organizations, types, and statuses
 4. **Membership system**: User-account relationships
-5. **Invitation system**: Secure token-based invitations
-6. **Domain verification**: Organization domain ownership
-7. **Automation**: User onboarding triggers
-8. **Performance**: Indexes and cleanup functions
+5. **Automation**: User onboarding triggers
 
 ## Next: Auth Claims and Permissions
 

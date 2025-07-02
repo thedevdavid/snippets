@@ -1073,7 +1073,34 @@ CREATE TRIGGER on_domain_insert
   FOR EACH ROW EXECUTE FUNCTION private.set_verification_code();
 ```
 
-## Security Checklist
+### 6. Data Cleanup Functions
+
+Implement regular maintenance procedures:
+
+```sql
+-- Clean up expired invitations
+CREATE OR REPLACE FUNCTION accounts.cleanup_expired_invitations()
+RETURNS void AS $$
+BEGIN
+  DELETE FROM accounts.account_members
+  WHERE user_id IS NULL
+  AND invite_expires_at < NOW() - INTERVAL '7 days';
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Archive soft-deleted accounts
+CREATE OR REPLACE FUNCTION accounts.archive_deleted_accounts()
+RETURNS void AS $$
+BEGIN
+  UPDATE accounts.accounts
+  SET deleted_at = NOW()
+  WHERE status = (SELECT id FROM accounts.account_statuses WHERE slug = 'deleted')
+  AND deleted_at IS NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
+
+## 7. Security Checklist
 
 Before deploying your multi-tenant system:
 
