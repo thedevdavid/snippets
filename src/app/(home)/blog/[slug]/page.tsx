@@ -67,8 +67,8 @@ export default async function Page(props: {
 
         <hr className="mb-6" />
 
-        <div className="flex flex-col gap-6 lg:flex-row">
-          <div className="flex-1">
+        <div className="relative grid grid-cols-12 gap-6 lg:grid">
+          <div className="col-span-12 lg:col-span-8">
             <div className="prose prose-sm prose-neutral max-w-none dark:prose-invert">
               <MDXContent
                 components={getMDXComponents({
@@ -78,21 +78,21 @@ export default async function Page(props: {
             </div>
           </div>
 
-          <aside className="lg:w-72">
-            <div className="sticky top-6 space-y-6">
+          <aside className="sticky top-32 col-span-3 col-start-10 hidden h-fit lg:block">
+            <div className="space-y-6">
               {page.data.toc && page.data.toc.length > 0 && (
                 <div>
                   <h3 className="mb-3 text-base font-semibold">On this page</h3>
                   <nav className="space-y-2">
                     {page.data.toc.map((item) => (
-                      <a
+                      <Link
                         key={item.url}
                         href={item.url}
                         className="block text-xs text-fd-muted-foreground hover:text-fd-foreground"
                         style={{ paddingLeft: `${(item.depth - 2) * 12}px` }}
                       >
                         {item.title}
-                      </a>
+                      </Link>
                     ))}
                   </nav>
                 </div>
